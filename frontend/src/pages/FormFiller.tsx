@@ -378,6 +378,8 @@ const FormFiller = () => {
                         value={formData[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                       />
+                    )}
+
                     {field.type === 'url' && (
                       <input
                         type="url"

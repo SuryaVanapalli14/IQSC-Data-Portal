@@ -33,6 +33,9 @@ const ResponseViewer = () => {
   const [exporting, setExporting] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null);
   const [csvData, setCsvData] = useState<string[][]>([]);
+  const [reviewResponseId, setReviewResponseId] = useState<string | null>(null);
+  const [reviewAction, setReviewAction] = useState<'APPROVED' | 'REJECTED' | null>(null);
+  const [reviewComment, setReviewComment] = useState('');
   const navigate = useNavigate();
 
   const isOversight = user?.role === 'IQAC_ADMIN' || user?.role === 'HOD';
@@ -130,20 +133,19 @@ const ResponseViewer = () => {
     }
   }, [previewFile]);
 
-  const handleReview = async (responseId: string, newStatus: 'APPROVED' | 'REJECTED') => {
-    let comment = '';
-    if (newStatus === 'REJECTED') {
-      const promptComment = window.prompt('Please enter the reason for rejection (feedback comments):');
-      if (promptComment === null) return; // User cancelled
-      comment = promptComment;
-    } else {
-      if (!window.confirm('Are you sure you want to approve this response? This will lock the response.')) return;
-    }
+  const triggerReview = (responseId: string, action: 'APPROVED' | 'REJECTED') => {
+    setReviewResponseId(responseId);
+    setReviewAction(action);
+    setReviewComment('');
+  };
+
+  const submitReview = async () => {
+    if (!reviewResponseId || !reviewAction) return;
 
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/responses/${responseId}/review`, 
-        { status: newStatus, comment },
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/responses/${reviewResponseId}/review`, 
+        { status: reviewAction, comment: reviewComment },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
@@ -152,9 +154,14 @@ const ResponseViewer = () => {
         if (!prev) return prev;
         return {
           ...prev,
-          responses: prev.responses.map(r => r.id === responseId ? { ...r, status: newStatus, rejectionComment: comment } : r)
+          responses: prev.responses.map(r => r.id === reviewResponseId ? { ...r, status: reviewAction, rejectionComment: reviewComment } : r)
         };
       });
+
+      // Close modal
+      setReviewResponseId(null);
+      setReviewAction(null);
+      setReviewComment('');
     } catch (err) {
       console.error('Failed to review response:', err);
       alert('Failed to update response review status');
@@ -381,7 +388,7 @@ const ResponseViewer = () => {
                     {resp.status === 'PENDING' ? (
                       <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                         <button
-                          onClick={() => handleReview(resp.id, 'APPROVED')}
+                          onClick={() => triggerReview(resp.id, 'APPROVED')}
                           style={{
                             padding: '6px 12px',
                             background: '#22c55e',
@@ -396,7 +403,7 @@ const ResponseViewer = () => {
                           Approve
                         </button>
                         <button
-                          onClick={() => handleReview(resp.id, 'REJECTED')}
+                          onClick={() => triggerReview(resp.id, 'REJECTED')}
                           style={{
                             padding: '6px 12px',
                             background: '#ef4444',
@@ -538,6 +545,83 @@ const ResponseViewer = () => {
                 <a href={previewFile.url} download style={{ color: 'var(--accent-primary)', marginTop: '1rem', display: 'inline-block' }}>Download File</a>
               </div>
             )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {reviewResponseId && reviewAction && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+          animation: 'fade 0.2s'
+        }}>
+          <div style={{
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: '450px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            animation: 'scaleUp 0.2s'
+          }}>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', marginBottom: '1rem', color: reviewAction === 'APPROVED' ? '#22c55e' : '#ef4444' }}>
+              Confirm Form {reviewAction === 'APPROVED' ? 'Approval' : 'Rejection'}
+            </h3>
+            <p style={{ opacity: 0.8, fontSize: '0.95rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              {reviewAction === 'APPROVED' 
+                ? 'Are you sure you want to approve this faculty submission? This will lock their response and they will no longer be able to edit it.'
+                : 'Please provide comments or feedback outlining the reason for rejecting this response.'}
+            </p>
+            {reviewAction === 'REJECTED' && (
+              <textarea
+                className="input"
+                rows={4}
+                placeholder="Enter feedback details..."
+                value={reviewComment}
+                onChange={e => setReviewComment(e.target.value)}
+                style={{ width: '100%', marginBottom: '1.5rem', resize: 'vertical' }}
+              />
+            )}
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => { setReviewResponseId(null); setReviewAction(null); }}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={submitReview}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: reviewAction === 'APPROVED' ? '#22c55e' : '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Confirm {reviewAction === 'APPROVED' ? 'Approve' : 'Reject'}
+              </button>
+            </div>
           </div>
         </div>,
         document.body
