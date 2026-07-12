@@ -377,6 +377,26 @@ app.post('/api/forms', authenticate, isAdmin, async (req: Request, res: Response
   }
 });
 
+app.delete('/api/forms/:id', authenticate, isAdmin, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  try {
+    const form = await prisma.form.findUnique({ where: { id: req.params.id } });
+    if (!form) return res.status(404).json({ error: 'Form not found' });
+
+    // Responses will be cascade-deleted via Prisma schema (onDelete: Cascade)
+    await prisma.form.delete({ where: { id: req.params.id } });
+
+    // Notify all connected clients that the form has been deleted
+    io.emit('form_deleted', { id: req.params.id });
+
+    await createLog(user.userId, 'FORM_DELETED', `Form "${form.title}" deleted`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to delete form:', err);
+    res.status(500).json({ error: 'Failed to delete form' });
+  }
+});
+
 app.get('/api/forms/:id', authenticate, async (req: Request, res: Response) => {
   const user = (req as any).user;
   try {

@@ -39,6 +39,9 @@ const Dashboard = () => {
   const [selectedLabelFilter, setSelectedLabelFilter] = useState<string | null>(null);
   const [movingFormId, setMovingFormId] = useState<string | null>(null);
   const [hoveredFormTargetId, setHoveredFormTargetId] = useState<string | null>(null);
+  const [deleteFormId, setDeleteFormId] = useState<string | null>(null);
+  const [deleteFormTitle, setDeleteFormTitle] = useState<string>('');
+  const [deletingForm, setDeletingForm] = useState(false);
 
   const getFolderDepartmentsCountText = (folderId: string) => {
     const folderForms = forms.filter(f => f.folderId === folderId);
@@ -153,11 +156,17 @@ const Dashboard = () => {
       }));
     });
 
+    // Socket listener for deleted forms
+    socket.on('form_deleted', ({ id }: { id: string }) => {
+      setForms(prev => prev.filter(f => f.id !== id));
+    });
+
     return () => {
       socket.off('new_response');
       socket.off('form_created');
       socket.off('response_updated');
       socket.off('response_reviewed');
+      socket.off('form_deleted');
     };
   }, [user]);
 
@@ -197,6 +206,24 @@ const Dashboard = () => {
       }
     } catch (err) {
       alert('Failed to delete folder');
+    }
+  };
+
+  const handleDeleteForm = async () => {
+    if (!deleteFormId) return;
+    setDeletingForm(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/forms/${deleteFormId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setForms(prev => prev.filter(f => f.id !== deleteFormId));
+      setDeleteFormId(null);
+      setDeleteFormTitle('');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to delete form');
+    } finally {
+      setDeletingForm(false);
     }
   };
 
@@ -288,7 +315,40 @@ const Dashboard = () => {
           </div>
           
           {user?.role === 'IQAC_ADMIN' && (
-            <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <button
+                title="Delete Form"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteFormId(form.id);
+                  setDeleteFormTitle(form.title);
+                }}
+                style={{
+                  background: 'none',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  fontSize: '0.75rem',
+                  opacity: 0.7,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '0.7';
+                  e.currentTarget.style.background = 'none';
+                }}
+              >
+                <Trash2 size={13} strokeWidth={2.5} /> Delete
+              </button>
+              <div style={{ position: 'relative' }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -376,6 +436,7 @@ const Dashboard = () => {
                   ))}
                 </div>
               )}
+            </div>
             </div>
           )}
 
@@ -1020,6 +1081,88 @@ const Dashboard = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Form Confirmation Modal */}
+      {deleteFormId && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 2000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'var(--card-bg)',
+            padding: '2rem',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '420px',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2), 0 0 0 1px rgba(239, 68, 68, 0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1rem' }}>
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                borderRadius: '10px',
+                padding: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <Trash2 size={22} style={{ color: '#ef4444' }} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem' }}>Delete Form?</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', opacity: 0.6 }}>This action cannot be undone</p>
+              </div>
+            </div>
+            <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1.5rem', lineHeight: '1.6' }}>
+              You are about to permanently delete <strong style={{ color: 'var(--text-primary)' }}>"{deleteFormTitle}"</strong>. All associated responses will also be deleted.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setDeleteFormId(null); setDeleteFormTitle(''); }}
+                disabled={deletingForm}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  cursor: deletingForm ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteForm}
+                disabled={deletingForm}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: deletingForm ? '#c53030' : '#ef4444',
+                  color: 'white',
+                  cursor: deletingForm ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '0.9rem',
+                  transition: 'background 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {deletingForm ? 'Deleting...' : 'Delete Form'}
+              </button>
+            </div>
           </div>
         </div>
       )}
