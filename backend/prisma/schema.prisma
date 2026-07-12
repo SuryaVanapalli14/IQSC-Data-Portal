@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  password     String
+  name         String
+  role         Role       @default(USER)
+  tokenVersion Int        @default(0)
+  forms        Form[]
+  responses    Response[]
+  templates    Template[]
+  logs         Log[]
+  createdAt    DateTime   @default(now())
+}
+
+model Log {
+  id        String   @id @default(uuid())
+  action    String
+  details   String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  USER
+  CCRB
+}
+
+model Form {
+  id             String     @id @default(uuid())
+  title          String
+  description    String?
+  schema         Json       // Array of field objects
+  targetStations String[]   @default([])
+  creator        User?      @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorId      String?
+  responses      Response[]
+  folder         Folder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId       String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Folder {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  forms     Form[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Response {
+  id           String   @id @default(uuid())
+  form         Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId       String
+  respondent   User?    @relation(fields: [respondentId], references: [id], onDelete: SetNull)
+  respondentId String?
+  data         Json     // Field ID -> Value mapping
+  submittedAt  DateTime @default(now())
+}
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  schema      Json
+  creator     User?    @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorId   String?
+  createdAt   DateTime @default(now())
+}
+
+model StationMetric {
+  id          String   @id @default(uuid())
+  category    String   
+  name        String   
+  value       Float
+  target      Float?
+  formula     String?
+  period      String?  
+  color       String?  
+  totalFiled  Float?
+  totalSheets Float?
+  updatedAt   DateTime @updatedAt
+}
