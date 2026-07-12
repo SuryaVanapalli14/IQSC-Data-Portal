@@ -36,6 +36,7 @@ const ResponseViewer = () => {
   const [reviewResponseId, setReviewResponseId] = useState<string | null>(null);
   const [reviewAction, setReviewAction] = useState<'APPROVED' | 'REJECTED' | null>(null);
   const [reviewComment, setReviewComment] = useState('');
+  const [editingResponse, setEditingResponse] = useState<{ id: string; data: any } | null>(null);
   const navigate = useNavigate();
 
   const isOversight = user?.role === 'IQAC_ADMIN' || user?.role === 'HOD';
@@ -132,6 +133,25 @@ const ResponseViewer = () => {
       setCsvData([]);
     }
   }, [previewFile]);
+
+  const handleAdminEdit = async () => {
+    if (!editingResponse) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${import.meta.env.VITE_API_URL}/api/responses/${editingResponse.id}`,
+        { data: editingResponse.data },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setForm(prev => {
+        if (!prev) return prev;
+        return { ...prev, responses: prev.responses.map(r => r.id === editingResponse!.id ? { ...r, data: editingResponse!.data } : r) };
+      });
+      setEditingResponse(null);
+    } catch (err) {
+      console.error('Admin edit failed:', err);
+      alert('Failed to save changes.');
+    }
+  };
 
   const triggerReview = (responseId: string, action: 'APPROVED' | 'REJECTED') => {
     setReviewResponseId(responseId);
@@ -286,80 +306,72 @@ const ResponseViewer = () => {
       </div>
 
       <div style={{ overflowX: 'auto', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '180px' }} />
+            {form.schema.map((f: any) => <col key={f.id} style={{ width: '160px' }} />)}
+            <col style={{ width: '110px' }} />
+            <col style={{ width: '155px' }} />
+            {isOversight && <col style={{ width: user?.role === 'IQAC_ADMIN' ? '180px' : '140px' }} />}
+          </colgroup>
           <thead>
             <tr style={{ borderBottom: '2px solid var(--border-color)', background: 'var(--bg-primary)' }}>
-              <th style={{ padding: '1rem' }}>Respondent</th>
+              <th style={{ padding: '0.75rem 1rem', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.7 }}>Respondent</th>
               {form.schema.map((field: any) => (
-                <th key={field.id} style={{ padding: '1rem' }}>{field.label}</th>
+                <th key={field.id} style={{ padding: '0.75rem 1rem', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.7 }}>{field.label}</th>
               ))}
-              <th style={{ padding: '1rem' }}>Status</th>
+              <th style={{ padding: '0.75rem 1rem', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.7 }}>Status</th>
               <th 
-                style={{ padding: '1rem', cursor: 'pointer', userSelect: 'none' }}
+                style={{ padding: '0.75rem 1rem', cursor: 'pointer', userSelect: 'none', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.7 }}
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
               >
                 Date {sortOrder === 'asc' ? '↑' : '↓'}
               </th>
-              {isOversight && <th style={{ padding: '1rem', textAlign: 'right' }}>Actions</th>}
+              {isOversight && <th style={{ padding: '0.75rem 1rem', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.7, textAlign: 'right' }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
             {sortedResponses.map((resp) => (
-              <tr key={resp.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                    <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '8px', borderRadius: '50%', display: 'flex' }}>
-                      <User size={16} />
+              <tr key={resp.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.15s' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(37,99,235,0.03)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <td style={{ padding: '0.75rem 1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <div style={{ background: 'var(--accent-primary)', color: 'white', padding: '7px', borderRadius: '50%', display: 'flex', flexShrink: 0 }}>
+                      <User size={14} />
                     </div>
-                    <div>
-                      <div style={{ fontWeight: 'bold' }}>{resp.respondent?.name || 'Anonymous'}</div>
-                      <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>{resp.respondent?.email}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: '600', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resp.respondent?.name || 'Anonymous'}</div>
+                      <div style={{ fontSize: '0.75rem', opacity: 0.55, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{resp.respondent?.email}</div>
                     </div>
                   </div>
                 </td>
                 {form.schema.map((field: any) => (
-                  <td key={field.id} style={{ padding: '1rem' }}>
+                  <td key={field.id} style={{ padding: '0.75rem 1rem', verticalAlign: 'top' }}>
                     {typeof resp.data[field.id] === 'object' && resp.data[field.id]?.url ? (
-                      <div style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '0.75rem',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        <span style={{ 
-                          fontSize: '0.95rem', 
-                          fontWeight: '400',
-                          color: 'var(--text-primary)',
-                          maxWidth: '180px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }} title={resp.data[field.id].filename}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '110px' }} title={resp.data[field.id].filename}>
                           {resp.data[field.id].filename}
                         </span>
                         <button 
-                          onClick={() => setPreviewFile({ 
-                            url: resp.data[field.id].url, 
-                            name: resp.data[field.id].filename || 'Attachment' 
-                          })}
+                          onClick={() => setPreviewFile({ url: resp.data[field.id].url, name: resp.data[field.id].filename || 'Attachment' })}
                           title="Preview"
-                          style={{ 
-                            background: 'none', 
-                            color: 'var(--accent-primary)', 
-                            border: 'none', 
-                            padding: '4px', 
-                            cursor: 'pointer',
-                            display: 'flex',
-                            transition: 'opacity 0.2s',
-                            opacity: 0.7
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                          onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+                          style={{ background: 'none', color: 'var(--accent-primary)', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', flexShrink: 0 }}
                         >
-                          <Eye size={18} />
+                          <Eye size={15} />
                         </button>
                       </div>
+                    ) : field.type === 'url' && resp.data[field.id] ? (
+                      <a href={resp.data[field.id].startsWith('http') ? resp.data[field.id] : `https://${resp.data[field.id]}`} target="_blank" rel="noopener noreferrer"
+                        style={{ color: 'var(--accent-primary)', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', whiteSpace: 'nowrap' }}
+                        title={resp.data[field.id]}>
+                        {resp.data[field.id]}
+                      </a>
                     ) : (
-                      resp.data[field.id] || <span style={{ opacity: 0.3 }}>—</span>
+                      <span style={{ fontSize: '0.88rem', display: 'block', wordBreak: 'break-word', lineHeight: '1.4', color: resp.data[field.id] ? 'var(--text-primary)' : undefined, opacity: resp.data[field.id] ? 1 : 0.3 }}>
+                        {resp.data[field.id] || '—'}
+                      </span>
                     )}
                   </td>
                 ))}
@@ -384,42 +396,30 @@ const ResponseViewer = () => {
                   </div>
                 </td>
                 {isOversight && (
-                  <td style={{ padding: '1rem', textAlign: 'right' }}>
-                    {resp.status === 'PENDING' ? (
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {resp.status === 'PENDING' && (
+                        <>
+                          <button onClick={() => triggerReview(resp.id, 'APPROVED')} style={{ padding: '5px 10px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}>Approve</button>
+                          <button onClick={() => triggerReview(resp.id, 'REJECTED')} style={{ padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}>Reject</button>
+                        </>
+                      )}
+                      {user?.role === 'IQAC_ADMIN' && (
                         <button
-                          onClick={() => triggerReview(resp.id, 'APPROVED')}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#22c55e',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold'
-                          }}
+                          onClick={() => setEditingResponse({ id: resp.id, data: { ...resp.data } })}
+                          style={{ padding: '5px 10px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}
                         >
-                          Approve
+                          ✏️ Edit
                         </button>
-                        <button
-                          onClick={() => triggerReview(resp.id, 'REJECTED')}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          Reject
-                        </button>
+                      )}
+                      {resp.status !== 'PENDING' && user?.role !== 'IQAC_ADMIN' && (
+                        <span style={{ fontSize: '0.75rem', opacity: 0.45, fontStyle: 'italic' }}>Reviewed</span>
+                      )}
+                    </div>
+                    {resp.rejectionComment && (
+                      <div style={{ fontSize: '0.72rem', color: '#ef4444', marginTop: '4px', textAlign: 'right', maxWidth: '160px', marginLeft: 'auto', lineHeight: '1.3' }}>
+                        💬 {resp.rejectionComment}
                       </div>
-                    ) : (
-                      <span style={{ fontSize: '0.8rem', opacity: 0.5, fontStyle: 'italic' }}>Reviewed</span>
                     )}
                   </td>
                 )}
@@ -621,6 +621,43 @@ const ResponseViewer = () => {
               >
                 Confirm {reviewAction === 'APPROVED' ? 'Approve' : 'Reject'}
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {editingResponse && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10001 }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '16px', padding: '2rem', width: 'min(90vw, 560px)', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', margin: 0 }}>✏️ Edit Response</h3>
+              <button onClick={() => setEditingResponse(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', opacity: 0.6, display: 'flex' }}><X size={22} /></button>
+            </div>
+            <p style={{ fontSize: '0.85rem', opacity: 0.6, marginBottom: '1.5rem' }}>As IQAC Admin you can modify any field below and save.</p>
+            {form?.schema.map((field: any) => (
+              <div key={field.id} style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6, marginBottom: '0.4rem' }}>{field.label}</label>
+                {field.type === 'textarea' ? (
+                  <textarea className="input" rows={3} value={editingResponse.data[field.id] || ''}
+                    onChange={e => setEditingResponse(prev => prev ? { ...prev, data: { ...prev.data, [field.id]: e.target.value } } : prev)}
+                    style={{ width: '100%', resize: 'vertical' }}
+                  />
+                ) : field.type === 'file' ? (
+                  <p style={{ fontSize: '0.82rem', opacity: 0.5, fontStyle: 'italic' }}>File uploads cannot be edited directly.</p>
+                ) : (
+                  <input type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'url' ? 'url' : 'text'}
+                    className="input"
+                    value={editingResponse.data[field.id] || ''}
+                    onChange={e => setEditingResponse(prev => prev ? { ...prev, data: { ...prev.data, [field.id]: e.target.value } } : prev)}
+                    style={{ width: '100%' }}
+                  />
+                )}
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button onClick={() => setEditingResponse(null)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleAdminEdit} style={{ padding: '10px 20px', borderRadius: '8px', background: 'var(--accent-primary)', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Save Changes</button>
             </div>
           </div>
         </div>,
