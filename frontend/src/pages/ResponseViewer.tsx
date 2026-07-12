@@ -4,6 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, User, Calendar, FileSpreadsheet, Eye, X, FileText } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { useApp } from '../context/AppContext';
+import { format } from 'date-fns';
 
 const socket = io(`${import.meta.env.VITE_API_URL}`);
 
@@ -11,6 +13,8 @@ interface Response {
   id: string;
   data: any;
   respondent: { name: string; email: string };
+  status: string;
+  rejectionComment?: string | null;
   submittedAt: string;
 }
 
@@ -21,16 +25,17 @@ interface Form {
   responses: Response[];
 }
 
-import { format } from 'date-fns';
-
 const ResponseViewer = () => {
   const { id } = useParams();
+  const { user } = useApp();
   const [form, setForm] = useState<Form | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); 
   const [exporting, setExporting] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null);
   const [csvData, setCsvData] = useState<string[][]>([]);
   const navigate = useNavigate();
+
+  const isOversight = user?.role === 'IQAC_ADMIN' || user?.role === 'HOD';
 
   useEffect(() => {
     const fetchResponses = async () => {
@@ -50,12 +55,36 @@ const ResponseViewer = () => {
     socket.on('new_response', (response) => {
       setForm(prev => {
         if (!prev) return prev;
+        // Avoid duplicate additions
+        if (prev.responses.some(r => r.id === response.id)) return prev;
         return { ...prev, responses: [...(prev.responses || []), response] };
+      });
+    });
+
+    socket.on('response_updated', (updated) => {
+      setForm(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          responses: prev.responses.map(r => r.id === updated.id ? { ...r, ...updated } : r)
+        };
+      });
+    });
+
+    socket.on('response_reviewed', (updated) => {
+      setForm(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          responses: prev.responses.map(r => r.id === updated.id ? { ...r, ...updated } : r)
+        };
       });
     });
 
     return () => {
       socket.off('new_response');
+      socket.off('response_updated');
+      socket.off('response_reviewed');
     };
   }, [id]);
 
@@ -101,6 +130,37 @@ const ResponseViewer = () => {
     }
   }, [previewFile]);
 
+  const handleReview = async (responseId: string, newStatus: 'APPROVED' | 'REJECTED') => {
+    let comment = '';
+    if (newStatus === 'REJECTED') {
+      const promptComment = window.prompt('Please enter the reason for rejection (feedback comments):');
+      if (promptComment === null) return; // User cancelled
+      comment = promptComment;
+    } else {
+      if (!window.confirm('Are you sure you want to approve this response? This will lock the response.')) return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/responses/${responseId}/review`, 
+        { status: newStatus, comment },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Update local state
+      setForm(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          responses: prev.responses.map(r => r.id === responseId ? { ...r, status: newStatus, rejectionComment: comment } : r)
+        };
+      });
+    } catch (err) {
+      console.error('Failed to review response:', err);
+      alert('Failed to update response review status');
+    }
+  };
+
   const handleExport = () => {
     if (!form || form.responses.length === 0) {
       alert('No responses to export.');
@@ -109,7 +169,7 @@ const ResponseViewer = () => {
 
     setExporting(true);
     try {
-      let headers = ['Submission Date and Time', 'Respondent Name', 'Respondent Email'];
+      let headers = ['Submission Date and Time', 'Respondent Name', 'Respondent Email', 'Status', 'Rejection Comment'];
       const dynamicHeaders = form.schema.map(f => f.label);
       const allHeaders = [...headers, ...dynamicHeaders];
       const csvRows = [allHeaders.join(',')];
@@ -118,7 +178,9 @@ const ResponseViewer = () => {
         const row = [
           format(new Date(resp.submittedAt), 'yyyy-MM-dd HH:mm:ss'),
           `"${(resp.respondent?.name || 'Unknown').replace(/"/g, '""')}"`,
-          `"${(resp.respondent?.email || 'N/A').replace(/"/g, '""')}"`
+          `"${(resp.respondent?.email || 'N/A').replace(/"/g, '""')}"`,
+          resp.status,
+          `"${(resp.rejectionComment || '').replace(/"/g, '""')}"`
         ];
 
         form.schema.forEach(field => {
@@ -145,7 +207,6 @@ const ResponseViewer = () => {
       link.click();
       document.body.removeChild(link);
 
-      // Log the export
       const token = localStorage.getItem('token');
       axios.post(`${import.meta.env.VITE_API_URL}/api/admin/log-export`, 
         { formId: form.id, count: (form.responses || []).length },
@@ -225,12 +286,14 @@ const ResponseViewer = () => {
               {form.schema.map((field: any) => (
                 <th key={field.id} style={{ padding: '1rem' }}>{field.label}</th>
               ))}
+              <th style={{ padding: '1rem' }}>Status</th>
               <th 
                 style={{ padding: '1rem', cursor: 'pointer', userSelect: 'none' }}
                 onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
               >
                 Date {sortOrder === 'asc' ? '↑' : '↓'}
               </th>
+              {isOversight && <th style={{ padding: '1rem', textAlign: 'right' }}>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -293,17 +356,71 @@ const ResponseViewer = () => {
                     )}
                   </td>
                 ))}
+                <td style={{ padding: '1rem' }}>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    background: resp.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : 
+                                resp.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                    color: resp.status === 'APPROVED' ? '#22c55e' : 
+                           resp.status === 'REJECTED' ? '#ef4444' : '#f59e0b'
+                  }}>
+                    {resp.status}
+                  </span>
+                </td>
                 <td style={{ padding: '1rem', fontSize: '0.8rem', opacity: 0.7 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Calendar size={14} />
                     {new Date(resp.submittedAt).toLocaleString()}
                   </div>
                 </td>
+                {isOversight && (
+                  <td style={{ padding: '1rem', textAlign: 'right' }}>
+                    {resp.status === 'PENDING' ? (
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => handleReview(resp.id, 'APPROVED')}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#22c55e',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleReview(resp.id, 'REJECTED')}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '0.8rem', opacity: 0.5, fontStyle: 'italic' }}>Reviewed</span>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {form.responses.length === 0 && (
               <tr>
-                <td colSpan={form.schema.length + 2} style={{ textAlign: 'center', padding: '3rem', opacity: 0.5 }}>
+                <td colSpan={form.schema.length + 4} style={{ textAlign: 'center', padding: '3rem', opacity: 0.5 }}>
                   No responses yet.
                 </td>
               </tr>
@@ -430,5 +547,3 @@ const ResponseViewer = () => {
 };
 
 export default ResponseViewer;
-
-

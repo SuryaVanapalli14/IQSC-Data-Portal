@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface Field {
   id: string;
-  type: 'text' | 'number' | 'textarea' | 'select' | 'file';
+  type: 'text' | 'number' | 'textarea' | 'select' | 'file' | 'url' | 'date';
   label: string;
   placeholder?: string;
   required: boolean;
@@ -13,50 +13,24 @@ interface Field {
   allowedTypes?: string[]; // for file fields
 }
 
-const stationList = [
-  { email: 'gunadala@mail.com', name: 'Gunadala' },
-  { email: 'machavaram@mail.com', name: 'Machavaram' },
-  { email: 'patamata@mail.com', name: 'Patamata' },
-  { email: 'governorpet@mail.com', name: 'Governorpet' },
-  { email: 'krishnalanka@mail.com', name: 'Krishnalanka' },
-  { email: 'suryaraopet@mail.com', name: 'Suryaraopet' },
-  { email: 'ajith_singh_nagar@mail.com', name: 'Ajith Singh Nagar' },
-  { email: 'nunna@mail.com', name: 'Nunna' },
-  { email: 'satyanarayanapuram@mail.com', name: 'Satyanarayanapuram' },
-  { email: 'bhavanipuram@mail.com', name: 'Bhavanipuram' },
-  { email: 'ibrahimpatnam@mail.com', name: 'Ibrahimpatnam' },
-  { email: 'vijayawada_i_town@mail.com', name: 'Vijayawada I Town' },
-  { email: 'vijayawada_ii_town@mail.com', name: 'Vijayawada II Town' },
-  { email: 'vijayawada_traffic_i_t@mail.com', name: 'Vijayawada Traffic I (T)' },
-  { email: 'vijayawada_traffic_ii_t@mail.com', name: 'Vijayawada Traffic II (T)' },
-  { email: 'vijayawada_traffic_iii_t@mail.com', name: 'Vijayawada Traffic III (T)' },
-  { email: 'vijayawada_traffic_iv_t@mail.com', name: 'Vijayawada Traffic IV (T)' },
-  { email: 'vijayawada_traffic_v_t@mail.com', name: 'Vijayawada Traffic V (T)' },
-  { email: 'g_konduru@mail.com', name: 'G. Konduru' },
-  { email: 'mylavaram@mail.com', name: 'Mylavaram' },
-  { email: 'reddigudem@mail.com', name: 'Reddigudem' },
-  { email: 'a_konduru@mail.com', name: 'A. Konduru' },
-  { email: 'gampalagudem@mail.com', name: 'Gampalagudem' },
-  { email: 'tiruvuru@mail.com', name: 'Tiruvuru' },
-  { email: 'vissannapet@mail.com', name: 'Vissannapet' },
-  { email: 'nandigama@mail.com', name: 'Nandigama' },
-  { email: 'chillakallu@mail.com', name: 'Chillakallu' },
-  { email: 'jaggaiahpet@mail.com', name: 'Jaggaiahpet' },
-  { email: 'penuganchiprolu@mail.com', name: 'Penuganchiprolu' },
-  { email: 'vatsavai@mail.com', name: 'Vatsavai' },
-  { email: 'chandarlapadu@mail.com', name: 'Chandarlapadu' },
-  { email: 'kanchikacherla@mail.com', name: 'Kanchikacherla' },
-  { email: 'veerulapadu@mail.com', name: 'Veerulapadu' },
-  { email: 'cyber_crime@mail.com', name: 'Cyber Crime' },
-  { email: 'mahila_ups@mail.com', name: 'Mahila UPS' }
+const departmentList = [
+  { email: 'iqac@mail.com', name: 'IQAC Office' },
+  { email: 'cse@mail.com', name: 'Computer Science and Engineering' },
+  { email: 'ece@mail.com', name: 'Electronics and Communication Engineering' },
+  { email: 'eee@mail.com', name: 'Electrical and Electronics Engineering' },
+  { email: 'mech@mail.com', name: 'Mechanical Engineering' },
+  { email: 'civil@mail.com', name: 'Civil Engineering' },
+  { email: 'it@mail.com', name: 'Information Technology' },
+  { email: 'mba@mail.com', name: 'Master of Business Administration' },
+  { email: 'mca@mail.com', name: 'Master of Computer Applications' }
 ];
 
 const FormBuilder = () => {
   const [title, setTitle] = useState('Untitled Form');
   const [description, setDescription] = useState('');
   const [fields, setFields] = useState<Field[]>([]);
-  const [targetStations, setTargetStations] = useState<string[]>([]);
-  const [showStationDropdown, setShowStationDropdown] = useState(false);
+  const [targetNames, setTargetNames] = useState<string[]>([]);
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
   const [folders, setFolders] = useState<any[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
   const [leftWidth, setLeftWidth] = useState(50);
@@ -202,7 +176,7 @@ const FormBuilder = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.post(`${import.meta.env.VITE_API_URL}/api/forms`, 
-        { title, description, schema: fields, targetStations, folderId: selectedFolderId || null },
+        { title, description, schema: fields, targetNames, folderId: selectedFolderId || null },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       navigate('/admin');
@@ -244,10 +218,10 @@ const FormBuilder = () => {
 
           <div style={{ marginTop: '1rem', position: 'relative' }}>
             <label style={{ fontSize: '0.9rem', fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>
-              Target Police Stations
+              Target Departments
             </label>
             <p style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.5rem' }}>
-              Select specific stations allowed to view and fill this form. Leave blank to target all stations.
+              Select specific departments allowed to view and fill this form. Leave blank to target all departments.
             </p>
             <div style={{ position: 'relative' }}>
               <div 
@@ -263,13 +237,13 @@ const FormBuilder = () => {
                   gap: '6px',
                   alignItems: 'center'
                 }}
-                onClick={() => setShowStationDropdown(!showStationDropdown)}
+                onClick={() => setShowDepartmentDropdown(!showDepartmentDropdown)}
               >
-                {targetStations.length === 0 ? (
-                  <span style={{ fontSize: '0.9rem', opacity: 0.5 }}>All Police Stations</span>
+                {targetNames.length === 0 ? (
+                  <span style={{ fontSize: '0.9rem', opacity: 0.5 }}>All Departments</span>
                 ) : (
-                  targetStations.map(email => {
-                    const stationName = stationList.find(s => s.email === email)?.name || email;
+                  targetNames.map(email => {
+                    const deptName = departmentList.find(s => s.email === email)?.name || email;
                     return (
                       <div 
                         key={email} 
@@ -285,10 +259,10 @@ const FormBuilder = () => {
                         }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {stationName}
+                        {deptName}
                         <button 
                           style={{ background: 'none', border: 'none', color: 'white', padding: 0, cursor: 'pointer', display: 'flex' }}
-                          onClick={() => setTargetStations(targetStations.filter(s => s !== email))}
+                          onClick={() => setTargetNames(targetNames.filter(s => s !== email))}
                         >
                           <X size={12} />
                         </button>
@@ -302,7 +276,7 @@ const FormBuilder = () => {
               </div>
             </div>
 
-            {showStationDropdown && (
+            {showDepartmentDropdown && (
               <div style={{ 
                 position: 'absolute', 
                 top: '100%', 
@@ -320,22 +294,22 @@ const FormBuilder = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-primary)', position: 'sticky', top: 0 }}>
                   <button 
                     style={{ fontSize: '0.75rem', fontWeight: 'bold', background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer' }}
-                    onClick={(e) => { e.stopPropagation(); setTargetStations(stationList.map(s => s.email)); }}
+                    onClick={(e) => { e.stopPropagation(); setTargetNames(departmentList.map(s => s.email)); }}
                   >
                     Select All
                   </button>
                   <button 
                     style={{ fontSize: '0.75rem', fontWeight: 'bold', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
-                    onClick={(e) => { e.stopPropagation(); setTargetStations([]); }}
+                    onClick={(e) => { e.stopPropagation(); setTargetNames([]); }}
                   >
                     Clear All
                   </button>
                 </div>
-                {stationList.map(station => {
-                  const isSelected = targetStations.includes(station.email);
+                {departmentList.map(dept => {
+                  const isSelected = targetNames.includes(dept.email);
                   return (
                     <div 
-                      key={station.email} 
+                      key={dept.email} 
                       style={{ 
                         padding: '8px 12px', 
                         fontSize: '0.9rem', 
@@ -350,13 +324,13 @@ const FormBuilder = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isSelected) {
-                          setTargetStations(targetStations.filter(s => s !== station.email));
+                          setTargetNames(targetNames.filter(s => s !== dept.email));
                         } else {
-                          setTargetStations([...targetStations, station.email]);
+                          setTargetNames([...targetNames, dept.email]);
                         }
                       }}
                     >
-                      <span>{station.name}</span>
+                      <span>{dept.name}</span>
                       {isSelected && <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>✓</span>}
                     </div>
                   );
@@ -545,6 +519,8 @@ const FormBuilder = () => {
           <button onClick={() => addField('textarea')} className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>+ Textarea</button>
           <button onClick={() => addField('select')} className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>+ Select</button>
           <button onClick={() => addField('file')} className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>+ File</button>
+          <button onClick={() => addField('url')} className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>+ URL</button>
+          <button onClick={() => addField('date')} className="btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem' }}>+ Date</button>
         </div>
 
         <div style={{ display: 'flex', gap: '1rem', marginTop: '3rem' }}>
@@ -685,6 +661,8 @@ const FormBuilder = () => {
                 {field.type === 'text' && <input className="input" placeholder={field.placeholder} />}
                 {field.type === 'number' && <input type="number" className="input" />}
                 {field.type === 'textarea' && <textarea className="input" rows={3} />}
+                {field.type === 'url' && <input type="url" className="input" placeholder="https://example.com" />}
+                {field.type === 'date' && <input type="date" className="input" />}
                 {field.type === 'select' && (
                   <select className="input">
                     <option value="">Select an option...</option>

@@ -82,16 +82,18 @@ const History = () => {
                 <span style={{ 
                   fontSize: '0.75rem', 
                   fontWeight: '700', 
-                  color: '#10b981',
-                  background: 'rgba(16, 185, 129, 0.1)',
+                  color: item.status === 'APPROVED' ? '#22c55e' : 
+                         item.status === 'REJECTED' ? '#ef4444' : '#f59e0b',
+                  background: item.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.1)' : 
+                              item.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
                   padding: '4px 10px',
                   borderRadius: '6px',
                   textTransform: 'uppercase'
                 }}>
-                  Submitted
+                  {item.status === 'PENDING' ? 'Pending Review' : item.status}
                 </span>
                 <Link 
-                  to={`/officer/submission/${item.id}`}
+                  to={`/faculty/submission/${item.id}`}
                   style={{ 
                     display: 'flex', 
                     alignItems: 'center', 

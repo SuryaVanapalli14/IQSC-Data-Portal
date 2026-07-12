@@ -16,19 +16,18 @@ const Sidebar = () => {
     { name: 'Export Data', path: '/admin/export', icon: Download },
   ];
 
-  const officerLinks = [
-    { name: 'Forms', path: '/officer', icon: ClipboardList },
-    { name: 'My History', path: '/officer/history', icon: History },
+  const facultyLinks = [
+    { name: 'Forms', path: '/faculty', icon: ClipboardList },
+    { name: 'My History', path: '/faculty/history', icon: History },
   ];
 
-  const ccrbLinks = [
-    { name: 'Dashboard', path: '/ccrb', icon: LayoutDashboard },
-    { name: 'Manage Metrics', path: '/ccrb/metrics', icon: Sliders },
+  const hodLinks = [
+    { name: 'Dashboard', path: '/hod', icon: LayoutDashboard },
     { name: 'View Responses', path: '/admin', icon: ClipboardList },
     { name: 'Export Records', path: '/admin/export', icon: Download },
   ];
 
-  const links = user.role === 'ADMIN' ? adminLinks : (user.role === 'CCRB' ? ccrbLinks : officerLinks);
+  const links = user.role === 'IQAC_ADMIN' ? adminLinks : (user.role === 'HOD' ? hodLinks : facultyLinks);
 
   return (
     <aside style={{

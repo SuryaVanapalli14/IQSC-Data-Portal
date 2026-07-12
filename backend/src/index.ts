@@ -8,17 +8,14 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { v2 as cloudinary } from 'cloudinary';
+// import { v2 as cloudinary } from 'cloudinary';
 import { Request, Response } from 'express';
-import { generateToken, authenticate, isAdmin, isCCRB, isOversight } from './auth';
+import { generateToken, authenticate, isAdmin, isHOD, isOversight } from './auth';
 
 dotenv.config();
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Cloudinary config disabled for local setup
+
 
 const app = express();
 app.use(cors());
@@ -103,25 +100,15 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// File upload route - Cloudinary Hosted
-// File upload route - Cloudinary Hosted
+// File upload route - Local storage
 app.post('/api/upload', authenticate, upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
-    const isPDF = req.file.mimetype === 'application/pdf';
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'police_forms',
-      resource_type: isPDF ? 'raw' : 'auto',
-      access_mode: 'public'
-    });
-    // Delete local file after successful cloud upload
-    if (fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    res.json({ url: result.secure_url, filename: result.public_id, originalName: req.file.originalname });
+    const localUrl = `${req.protocol}://${req.get('host')}/media/${req.file.filename}`;
+    res.json({ url: localUrl, filename: req.file.filename, originalName: req.file.originalname });
   } catch (err) {
-    console.error('Cloudinary upload failed:', err);
-    res.status(500).json({ error: 'Cloud upload failed' });
+    console.error('Local upload failed:', err);
+    res.status(500).json({ error: 'Local upload failed' });
   }
 });
 
@@ -142,7 +129,7 @@ app.get('/api/auth/me', authenticate, async (req: Request, res: Response) => {
 app.get('/api/admin/users', authenticate, isOversight, async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, role: true, createdAt: true }
+      select: { id: true, email: true, name: true, role: true, department: true, createdAt: true }
     });
     res.json(users);
   } catch (err) {
@@ -180,7 +167,7 @@ app.get('/api/logs', authenticate, isOversight, async (req: Request, res: Respon
 app.get('/api/admin/manage-users', authenticate, isOversight, async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, role: true, createdAt: true }
+      select: { id: true, email: true, name: true, role: true, department: true, createdAt: true }
     });
     res.json(users);
   } catch (err) {
@@ -189,11 +176,17 @@ app.get('/api/admin/manage-users', authenticate, isOversight, async (req: Reques
 });
 
 app.post('/api/admin/manage-users', authenticate, isAdmin, async (req: Request, res: Response) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, department } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, name, role }
+      data: { 
+        email, 
+        password: hashedPassword, 
+        name, 
+        role, 
+        department: role !== 'IQAC_ADMIN' ? department : null 
+      }
     });
     await createLog((req as any).user.userId, 'CREATED_USER', `Created user ${email}`);
     res.json(user);
@@ -203,9 +196,14 @@ app.post('/api/admin/manage-users', authenticate, isAdmin, async (req: Request, 
 });
 
 app.put('/api/admin/manage-users/:id', authenticate, isAdmin, async (req: Request, res: Response) => {
-  const { email, password, name, role } = req.body;
+  const { email, password, name, role, department } = req.body;
   try {
-    const data: any = { email, name, role };
+    const data: any = { 
+      email, 
+      name, 
+      role, 
+      department: role !== 'IQAC_ADMIN' ? department : null 
+    };
     if (password) {
       data.password = await bcrypt.hash(password, 10);
       data.tokenVersion = { increment: 1 }; // Invalidate existing sessions on password change
@@ -234,7 +232,14 @@ app.delete('/api/admin/manage-users/:id', authenticate, isAdmin, async (req: Req
 // Export Routes
 app.get('/api/admin/export-data', authenticate, isOversight, async (req: Request, res: Response) => {
   const { startDate, endDate, formId, respondentId } = req.query;
+  const user = (req as any).user;
   try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { role: true, department: true }
+    });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+
     const where: any = {};
     if (formId) where.formId = formId as string;
     if (respondentId) where.respondentId = respondentId as string;
@@ -244,11 +249,18 @@ app.get('/api/admin/export-data', authenticate, isOversight, async (req: Request
       if (endDate) where.submittedAt.lte = new Date(endDate as string);
     }
 
+    // Role restrictions for exports
+    if (dbUser.role === 'HOD') {
+      where.respondent = { department: dbUser.department || '' };
+    } else if (dbUser.role === 'IQAC_ADMIN') {
+      where.status = 'APPROVED';
+    }
+
     const responses = await prisma.response.findMany({
       where,
       include: {
         form: { select: { title: true, schema: true } },
-        respondent: { select: { name: true, email: true } }
+        respondent: { select: { name: true, email: true, department: true } }
       },
       orderBy: { submittedAt: 'desc' }
     });
@@ -292,7 +304,7 @@ app.get('/api/forms', authenticate, async (req: Request, res: Response) => {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId },
-      select: { email: true, role: true }
+      select: { email: true, role: true, department: true }
     });
 
     if (!dbUser) {
@@ -303,7 +315,7 @@ app.get('/api/forms', authenticate, async (req: Request, res: Response) => {
       include: {
         responses: {
           where: { respondentId: user.userId },
-          select: { id: true }
+          select: { id: true, status: true, rejectionComment: true }
         },
         _count: {
           select: { responses: true }
@@ -314,19 +326,23 @@ app.get('/api/forms', authenticate, async (req: Request, res: Response) => {
       }
     });
 
-    // If role is USER (police station), filter forms they are targeted for
+    // If role is FACULTY, filter forms they are targeted for
     let filteredForms = forms;
-    if (dbUser.role === 'USER') {
+    if (dbUser.role === 'FACULTY') {
+      const deptEmail = dbUser.department ? `${dbUser.department.toLowerCase()}@mail.com` : null;
       filteredForms = forms.filter(form => 
-        !form.targetStations || 
-        form.targetStations.length === 0 || 
-        form.targetStations.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase())
+        !form.targetNames || 
+        form.targetNames.length === 0 || 
+        form.targetNames.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase()) ||
+        (deptEmail && form.targetNames.map(email => email.toLowerCase()).includes(deptEmail.toLowerCase()))
       );
     }
 
     const formsWithStatus = filteredForms.map(form => ({
       ...form,
       alreadyFilled: form.responses.length > 0,
+      responseStatus: form.responses[0]?.status || null,
+      rejectionComment: form.responses[0]?.rejectionComment || null,
       responses: undefined // Don't send full response list to everyone
     }));
 
@@ -337,7 +353,7 @@ app.get('/api/forms', authenticate, async (req: Request, res: Response) => {
 });
 
 app.post('/api/forms', authenticate, isAdmin, async (req: Request, res: Response) => {
-  const { title, description, schema, targetStations, folderId } = req.body;
+  const { title, description, schema, targetNames, folderId } = req.body;
   const user = (req as any).user;
   try {
     const form = await prisma.form.create({
@@ -345,7 +361,7 @@ app.post('/api/forms', authenticate, isAdmin, async (req: Request, res: Response
         title, 
         description, 
         schema, 
-        targetStations: targetStations || [],
+        targetNames: targetNames || [],
         creatorId: user.userId,
         folderId: folderId || null
       }
@@ -366,29 +382,51 @@ app.get('/api/forms/:id', authenticate, async (req: Request, res: Response) => {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.userId },
-      select: { email: true, role: true }
+      select: { email: true, role: true, department: true }
     });
 
     if (!dbUser) return res.status(404).json({ error: 'User not found' });
 
-    const isOversight = dbUser.role === 'ADMIN' || dbUser.role === 'CCRB';
+    let responsesQuery: any = undefined;
+    if (dbUser.role === 'IQAC_ADMIN') {
+      responsesQuery = {
+        where: { status: 'APPROVED' },
+        include: { respondent: { select: { name: true, email: true, department: true } } }
+      };
+    } else if (dbUser.role === 'HOD') {
+      responsesQuery = {
+        where: { respondent: { department: dbUser.department || '' } },
+        include: { respondent: { select: { name: true, email: true, department: true } } }
+      };
+    }
+
+    const includeQuery: any = {
+      folder: { select: { id: true, name: true } }
+    };
+    if (responsesQuery) {
+      includeQuery.responses = responsesQuery;
+    }
+
     const form = await prisma.form.findUnique({ 
       where: { id: req.params.id },
-      include: {
-        responses: isOversight ? { include: { respondent: { select: { name: true, email: true } } } } : undefined,
-        folder: { select: { id: true, name: true } }
-      }
+      include: includeQuery
     });
     
     if (!form) return res.status(404).json({ error: 'Form not found' });
 
-    // Restrict access for USER role if form is targeted and user email is not in the list
-    if (dbUser.role === 'USER' && form.targetStations && form.targetStations.length > 0 && !form.targetStations.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase())) {
-      return res.status(403).json({ error: 'Access denied: You are not targeted for this form' });
+    // Restrict access for FACULTY role if form is targeted and user email is not in the list
+    if (dbUser.role === 'FACULTY' && form.targetNames && form.targetNames.length > 0 && !form.targetNames.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase())) {
+      const deptEmail = dbUser.department ? `${dbUser.department.toLowerCase()}@mail.com` : null;
+      const isTargeted = form.targetNames.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase()) ||
+                         (deptEmail && form.targetNames.map(email => email.toLowerCase()).includes(deptEmail.toLowerCase()));
+      if (!isTargeted) {
+        return res.status(403).json({ error: 'Access denied: You are not targeted for this form' });
+      }
     }
 
     res.json(form);
   } catch (err) {
+    console.error('Failed to fetch form details:', err);
     res.status(500).json({ error: 'Failed to fetch form' });
   }
 });
@@ -407,13 +445,21 @@ app.post('/api/forms/:id/submit', authenticate, async (req: Request, res: Respon
     const form = await prisma.form.findUnique({ where: { id: req.params.id } });
     if (!form) return res.status(404).json({ error: 'Form not found' });
 
-    // Restrict submission for USER role if form is targeted and user email is not in the list
-    if (dbUser.role === 'USER' && form.targetStations && form.targetStations.length > 0 && !form.targetStations.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase())) {
+    // Restrict submission for FACULTY role if form is targeted and user email is not in the list
+    if (dbUser.role === 'FACULTY' && form.targetNames && form.targetNames.length > 0 && !form.targetNames.map(email => email.toLowerCase()).includes(dbUser.email.toLowerCase())) {
       return res.status(403).json({ error: 'Access denied: You are not targeted for this form' });
     }
 
+    // Check if approved response already exists
+    const existing = await prisma.response.findFirst({
+      where: { formId: req.params.id, respondentId: user.userId }
+    });
+    if (existing && existing.status === 'APPROVED') {
+      return res.status(403).json({ error: 'Response is already approved and locked' });
+    }
+
     const response = await prisma.response.create({
-      data: { formId: req.params.id, respondentId: user.userId, data },
+      data: { formId: req.params.id, respondentId: user.userId, data, status: 'PENDING' },
       include: { respondent: { select: { name: true, email: true } } }
     });
     
@@ -428,7 +474,14 @@ app.post('/api/forms/:id/submit', authenticate, async (req: Request, res: Respon
 });
 
 app.get('/api/responses/:id', authenticate, async (req: Request, res: Response) => {
+  const user = (req as any).user;
   try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { role: true, department: true }
+    });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+
     const response = await prisma.response.findUnique({
       where: { id: req.params.id },
       include: {
@@ -436,14 +489,119 @@ app.get('/api/responses/:id', authenticate, async (req: Request, res: Response) 
           select: { id: true, title: true, schema: true }
         },
         respondent: {
-          select: { name: true, email: true }
+          select: { name: true, email: true, department: true }
         }
       }
     });
     if (!response) return res.status(404).json({ error: 'Submission not found' });
+
+    // Admin can only view if APPROVED
+    if (dbUser.role === 'IQAC_ADMIN' && response.status !== 'APPROVED') {
+      return res.status(403).json({ error: 'Access denied: only HOD approved submissions are viewable by IQAC admins' });
+    }
+
+    // HOD can only view if same department
+    if (dbUser.role === 'HOD' && response.respondent?.department !== dbUser.department) {
+      return res.status(403).json({ error: 'Access denied: HODs can only view submissions from their own department' });
+    }
+
     res.json(response);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch submission' });
+  }
+});
+
+// HOD & Faculty Workflow Routes
+app.get('/api/forms/:id/my-response', authenticate, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  try {
+    const response = await prisma.response.findFirst({
+      where: { formId: req.params.id, respondentId: user.userId }
+    });
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user response' });
+  }
+});
+
+app.put('/api/responses/:id', authenticate, async (req: Request, res: Response) => {
+  const { data } = req.body;
+  const user = (req as any).user;
+  try {
+    const existing = await prisma.response.findUnique({
+      where: { id: req.params.id },
+      include: { form: true }
+    });
+    if (!existing) return res.status(404).json({ error: 'Response not found' });
+    
+    const isFaculty = user.role === 'FACULTY';
+    const isAdmin = user.role === 'IQAC_ADMIN';
+
+    // Faculty can only edit if not approved
+    if (isFaculty) {
+      if (existing.respondentId !== user.userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      if (existing.status === 'APPROVED') {
+        return res.status(403).json({ error: 'Response is locked and cannot be edited by faculty' });
+      }
+    } else if (!isAdmin) {
+      return res.status(403).json({ error: 'Access denied: only faculty or IQAC admin can edit response data' });
+    }
+
+    const updated = await prisma.response.update({
+      where: { id: req.params.id },
+      data: { 
+        data,
+        status: isFaculty ? 'PENDING' : existing.status // reset status if edited by Faculty
+      }
+    });
+
+    io.to(existing.formId).emit('response_updated', updated);
+
+    await createLog(user.userId, 'RESPONSE_UPDATED', `Response for form "${existing.formId}" updated`);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update response' });
+  }
+});
+
+app.post('/api/responses/:id/review', authenticate, isOversight, async (req: Request, res: Response) => {
+  const { status, comment } = req.body; // APPROVED or REJECTED
+  const user = (req as any).user;
+
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { role: true, department: true }
+    });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+
+    const existing = await prisma.response.findUnique({
+      where: { id: req.params.id },
+      include: { respondent: { select: { department: true } } }
+    });
+    if (!existing) return res.status(404).json({ error: 'Response not found' });
+
+    // HOD can only review their own department's submissions
+    if (dbUser.role === 'HOD' && existing.respondent?.department !== dbUser.department) {
+      return res.status(403).json({ error: 'Access denied: you can only review submissions from your own department' });
+    }
+
+    const updated = await prisma.response.update({
+      where: { id: req.params.id },
+      data: { 
+        status,
+        rejectionComment: comment || null
+      }
+    });
+
+    io.to(existing.formId).emit('response_reviewed', updated);
+
+    await createLog(user.userId, `RESPONSE_${status}`, `Response ${req.params.id} has been ${status} by ${user.role} ${user.userId}`);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to review response' });
   }
 });
 
@@ -466,6 +624,7 @@ app.post('/api/templates', authenticate, isAdmin, async (req: Request, res: Resp
     });
     res.json(template);
   } catch (err) {
+    console.error('Failed to create template:', err);
     res.status(500).json({ error: 'Failed to create template' });
   }
 });
@@ -532,10 +691,17 @@ app.post('/api/folders', authenticate, isAdmin, async (req: Request, res: Respon
 
 app.delete('/api/folders/:id', authenticate, isAdmin, async (req: Request, res: Response) => {
   try {
+    // Manually disconnect all forms linked to this folder first to prevent foreign key errors
+    await prisma.form.updateMany({
+      where: { folderId: req.params.id },
+      data: { folderId: null }
+    });
+
     await prisma.folder.delete({ where: { id: req.params.id } });
     await createLog((req as any).user.userId, 'FOLDER_DELETED', `Folder ${req.params.id} deleted`);
     res.json({ success: true });
   } catch (err) {
+    console.error('Failed to delete folder:', err);
     res.status(500).json({ error: 'Failed to delete folder' });
   }
 });
@@ -555,7 +721,7 @@ app.put('/api/forms/:id/folder', authenticate, isAdmin, async (req: Request, res
 
 
 // CCRB Dashboard endpoint (Placeholder)
-app.get('/api/ccrb/dashboard', authenticate, isCCRB, async (req: Request, res: Response) => {
+app.get('/api/ccrb/dashboard', authenticate, isHOD, async (req: Request, res: Response) => {
   res.json({ stats: [], charts: [] });
 });
 
@@ -622,59 +788,42 @@ app.delete('/api/ccrb/metrics/:id', authenticate, isOversight, async (req: Reque
   }
 });
 
-// Seed CCRB user
-const seedCCRB = async () => {
+// Seed HOD user
+const seedHOD = async () => {
   try {
-    const ccrbEmail = 'ccrb@mail.com';
-    const existing = await prisma.user.findUnique({ where: { email: ccrbEmail } });
+    const hodEmail = 'hod@mail.com';
+    const existing = await prisma.user.findUnique({ where: { email: hodEmail } });
     if (!existing) {
-      const hashedPassword = await bcrypt.hash('ccrb', 10);
+      const hashedPassword = await bcrypt.hash('hod', 10);
       await prisma.user.create({
         data: {
-          email: ccrbEmail,
+          email: hodEmail,
           password: hashedPassword,
-          name: 'CCRB Monitor',
-          role: 'CCRB'
+          name: 'Department HOD',
+          role: 'HOD'
         }
       });
-      console.log('CCRB User seeded');
+      console.log('HOD User seeded');
     }
   } catch (err) {
-    console.error('Failed to seed CCRB:', err);
+    console.error('Failed to seed HOD:', err);
   }
 };
-seedCCRB();
+seedHOD();
 
-// Seed Station Metrics
+// Seed Metrics (Academic/IQAC focused)
 const seedMetrics = async () => {
   try {
     const count = await prisma.stationMetric.count();
     if (count === 0) {
       await prisma.stationMetric.createMany({
         data: [
-          // Charge Sheets
-          { category: 'CHARGE_SHEET', name: '60_DAY', value: 60, formula: 'Total filed in that month / Total charge sheets', period: 'Monthly', color: '#1e3a8a' },
-          { category: 'CHARGE_SHEET', name: '90_DAY', value: 90, formula: 'Total filed in that month / Total charge sheets', period: 'Monthly', color: '#1e3a8a' },
-          { category: 'CHARGE_SHEET', name: 'ITSSO', value: 85, formula: 'Total filed in that month / Total charge sheets', period: 'Monthly', color: '#1e3a8a' },
-          
-          // Missing Cases 2026
-          { category: 'MISSING_CASES', name: '2026_MAN', value: 12, period: '2026 YTD', color: '#1e3a8a' },
-          { category: 'MISSING_CASES', name: '2026_BOY', value: 5, period: '2026 YTD', color: '#1e3a8a' },
-          { category: 'MISSING_CASES', name: '2026_WOMAN', value: 8, period: '2026 YTD', color: '#1e3a8a' },
-          { category: 'MISSING_CASES', name: '2026_GIRL', value: 3, period: '2026 YTD', color: '#1e3a8a' },
-          
-          // Missing Cases 2025
-          { category: 'MISSING_CASES', name: '2025_MAN', value: 45, period: 'Full Year 2025', color: '#1e3a8a' },
-          { category: 'MISSING_CASES', name: '2025_BOY', value: 20, period: 'Full Year 2025', color: '#1e3a8a' },
-          { category: 'MISSING_CASES', name: '2025_WOMAN', value: 30, period: 'Full Year 2025', color: '#1e3a8a' },
-          { category: 'MISSING_CASES', name: '2025_GIRL', value: 15, period: 'Full Year 2025', color: '#1e3a8a' },
-          
-          // Accidents
-          { category: 'ACCIDENTS', name: 'FATAL', value: 18, period: 'Till Date', color: '#7f1d1d' },
-          { category: 'ACCIDENTS', name: 'NON_FATAL', value: 42, period: 'Till Date', color: '#a16207' },
+          { category: 'IQAC_AUDIT', name: 'SUBMISSION_RATE', value: 92, formula: 'Completed forms / Total forms', period: 'Current Semester', color: '#2563eb' },
+          { category: 'IQAC_AUDIT', name: 'APPROVAL_RATE', value: 85, formula: 'Approved responses / Total responses', period: 'Current Semester', color: '#8b5cf6' },
+          { category: 'IQAC_AUDIT', name: 'PENDING_REVIEW', value: 15, formula: 'Pending responses / Total responses', period: 'YTD', color: '#10b981' },
         ]
       });
-      console.log('Station Metrics seeded');
+      console.log('IQAC Metrics seeded');
     }
   } catch (err) {
     console.error('Failed to seed metrics:', err);

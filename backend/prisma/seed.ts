@@ -4,128 +4,87 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminPassword = await bcrypt.hash('admin', 10);
-  const officerPassword = await bcrypt.hash('station', 10);
-  const ccrbPassword = await bcrypt.hash('ccrb', 10);
+  const commonPassword = await bcrypt.hash('123456789', 10);
 
-  // 1. Seed Admin
+  // 1. Seed IQAC Admin
   await prisma.user.upsert({
     where: { email: 'admin@mail.com' },
-    update: {},
+    update: { password: commonPassword, role: 'IQAC_ADMIN' },
     create: {
       email: 'admin@mail.com',
-      password: adminPassword,
-      name: 'System Administrator',
-      role: 'ADMIN',
+      password: commonPassword,
+      name: 'IQAC Administrator',
+      role: 'IQAC_ADMIN',
     },
   });
 
-  // 2. Seed Officer
-  await prisma.user.upsert({
-    where: { email: 'station@mail.com' },
-    update: {},
-    create: {
-      email: 'station@mail.com',
-      password: officerPassword,
-      name: 'Station Officer',
-      role: 'USER',
-    },
-  });
-
-  const stationNames = [
-    'Gunadala',
-    'Machavaram',
-    'Patamata',
-    'Governorpet',
-    'Krishnalanka',
-    'Suryaraopet',
-    'Ajith Singh Nagar',
-    'Nunna',
-    'Satyanarayanapuram',
-    'Bhavanipuram',
-    'Ibrahimpatnam',
-    'Vijayawada I Town',
-    'Vijayawada II Town',
-    'Vijayawada Traffic I (T)',
-    'Vijayawada Traffic II (T)',
-    'Vijayawada Traffic III (T)',
-    'Vijayawada Traffic IV (T)',
-    'Vijayawada Traffic V (T)',
-    'G. Konduru',
-    'Mylavaram',
-    'Reddigudem',
-    'A. Konduru',
-    'Gampalagudem',
-    'Tiruvuru',
-    'Vissannapet',
-    'Nandigama',
-    'Chillakallu',
-    'Jaggaiahpet',
-    'Penuganchiprolu',
-    'Vatsavai',
-    'Chandarlapadu',
-    'Kanchikacherla',
-    'Veerulapadu',
-    'Cyber Crime',
-    'Mahila UPS'
+  // 2. Seed HODs for each Department
+  const departments = [
+    { code: 'CSE', name: 'Computer Science & Engineering', hodEmail: 'hod@mail.com', hodName: 'CSE HOD' }, // hod@mail.com as CSE HOD for easy login
+    { code: 'ECE', name: 'Electronics & Communication Engineering', hodEmail: 'hod_ece@mail.com', hodName: 'ECE HOD' },
+    { code: 'EEE', name: 'Electrical & Electronics Engineering', hodEmail: 'hod_eee@mail.com', hodName: 'EEE HOD' },
+    { code: 'MECH', name: 'Mechanical Engineering', hodEmail: 'hod_mech@mail.com', hodName: 'Mechanical HOD' },
+    { code: 'CIVIL', name: 'Civil Engineering', hodEmail: 'hod_civil@mail.com', hodName: 'Civil HOD' },
+    { code: 'IT', name: 'Information Technology', hodEmail: 'hod_it@mail.com', hodName: 'IT HOD' },
+    { code: 'MBA', name: 'Master of Business Administration', hodEmail: 'hod_mba@mail.com', hodName: 'MBA HOD' },
+    { code: 'MCA', name: 'Master of Computer Applications', hodEmail: 'hod_mca@mail.com', hodName: 'MCA HOD' }
   ];
 
-  for (const name of stationNames) {
-    const email = name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') + '@mail.com';
+  for (const dept of departments) {
     await prisma.user.upsert({
-      where: { email },
-      update: {},
+      where: { email: dept.hodEmail },
+      update: { password: commonPassword, role: 'HOD', department: dept.code, name: dept.hodName },
       create: {
-        email,
-        password: officerPassword,
-        name,
-        role: 'USER',
+        email: dept.hodEmail,
+        password: commonPassword,
+        name: dept.hodName,
+        role: 'HOD',
+        department: dept.code
       },
     });
   }
 
-  // 3. Seed CCRB
-  await prisma.user.upsert({
-    where: { email: 'ccrb@mail.com' },
-    update: {},
-    create: {
-      email: 'ccrb@mail.com',
-      password: ccrbPassword,
-      name: 'CCRB Oversight',
-      role: 'CCRB',
-    },
-  });
+  // 3. Seed Faculty Accounts
+  const facultyUsers = [
+    { email: 'cse@mail.com', name: 'CSE Faculty #1', department: 'CSE' },
+    { email: 'cse2@mail.com', name: 'CSE Faculty #2', department: 'CSE' },
+    { email: 'ece@mail.com', name: 'ECE Faculty #1', department: 'ECE' },
+    { email: 'eee@mail.com', name: 'EEE Faculty #1', department: 'EEE' },
+    { email: 'mech@mail.com', name: 'MECH Faculty #1', department: 'MECH' },
+    { email: 'civil@mail.com', name: 'CIVIL Faculty #1', department: 'CIVIL' },
+    { email: 'it@mail.com', name: 'IT Faculty #1', department: 'IT' },
+    { email: 'mba@mail.com', name: 'MBA Faculty #1', department: 'MBA' },
+    { email: 'mca@mail.com', name: 'MCA Faculty #1', department: 'MCA' },
+    { email: 'faculty@mail.com', name: 'General Faculty Member', department: 'CSE' }
+  ];
 
-  // 4. Seed Station Metrics
+  for (const faculty of facultyUsers) {
+    await prisma.user.upsert({
+      where: { email: faculty.email },
+      update: { password: commonPassword, role: 'FACULTY', department: faculty.department, name: faculty.name },
+      create: {
+        email: faculty.email,
+        password: commonPassword,
+        name: faculty.name,
+        role: 'FACULTY',
+        department: faculty.department
+      },
+    });
+  }
+
+  // 4. Seed Metrics (Academic/IQAC focused)
   const metricCount = await prisma.stationMetric.count();
   if (metricCount === 0) {
     await prisma.stationMetric.createMany({
       data: [
-        // Charge Sheets
-        { category: 'CHARGE_SHEET', name: '60_DAY', value: 428, formula: 'Total filed / Target', period: 'Last 60 Days', color: '#2563eb' },
-        { category: 'CHARGE_SHEET', name: '90_DAY', value: 642, formula: 'Total filed / Target', period: 'Last 90 Days', color: '#8b5cf6' },
-        { category: 'CHARGE_SHEET', name: 'ITSSO', value: 606, formula: 'Internal Tracking', period: 'YTD', color: '#10b981' },
-        
-        // Missing Cases 2026
-        { category: 'MISSING_CASES', name: '2026_MAN', value: 12, period: '2026 YTD', color: '#3b82f6' },
-        { category: 'MISSING_CASES', name: '2026_BOY', value: 5, period: '2026 YTD', color: '#60a5fa' },
-        { category: 'MISSING_CASES', name: '2026_WOMAN', value: 8, period: '2026 YTD', color: '#ec4899' },
-        { category: 'MISSING_CASES', name: '2026_GIRL', value: 3, period: '2026 YTD', color: '#f472b6' },
-        
-        // Missing Cases 2025
-        { category: 'MISSING_CASES', name: '2025_MAN', value: 45, period: '2025 Full Year', color: '#3b82f6' },
-        { category: 'MISSING_CASES', name: '2025_BOY', value: 20, period: '2025 Full Year', color: '#60a5fa' },
-        { category: 'MISSING_CASES', name: '2025_WOMAN', value: 30, period: '2025 Full Year', color: '#ec4899' },
-        { category: 'MISSING_CASES', name: '2025_GIRL', value: 15, period: '2025 Full Year', color: '#f472b6' },
-        
-        // Accidents
-        { category: 'ACCIDENTS', name: 'FATAL', value: 18, period: 'Till Date', color: '#ef4444' },
-        { category: 'ACCIDENTS', name: 'NON_FATAL', value: 42, period: 'Till Date', color: '#f59e0b' },
+        { category: 'IQAC_AUDIT', name: 'SUBMISSION_RATE', value: 92, formula: 'Completed forms / Total forms', period: 'Current Semester', color: '#2563eb' },
+        { category: 'IQAC_AUDIT', name: 'APPROVAL_RATE', value: 85, formula: 'Approved responses / Total responses', period: 'Current Semester', color: '#8b5cf6' },
+        { category: 'IQAC_AUDIT', name: 'PENDING_REVIEW', value: 15, formula: 'Pending responses / Total responses', period: 'YTD', color: '#10b981' },
       ]
     });
   }
 
-  console.log('✅ Hosted Demo Seeding Complete');
+  console.log('✅ Hosted Demo Seeding Complete with Department HOD mapping');
 }
 
 main()

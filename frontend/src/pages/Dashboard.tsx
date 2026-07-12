@@ -19,10 +19,12 @@ interface Form {
   description: string;
   _count?: { responses: number };
   alreadyFilled?: boolean;
+  responseStatus?: string | null;
+  rejectionComment?: string | null;
   createdAt: string;
   folderId?: string | null;
   folder?: { id: string; name: string } | null;
-  targetStations?: string[];
+  targetNames?: string[];
 }
 
 const Dashboard = () => {
@@ -34,35 +36,36 @@ const Dashboard = () => {
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLabelFilter, setSelectedLabelFilter] = useState<string | null>(null);
   const [movingFormId, setMovingFormId] = useState<string | null>(null);
   const [hoveredFormTargetId, setHoveredFormTargetId] = useState<string | null>(null);
 
-  const getFolderStationsCountText = (folderId: string) => {
+  const getFolderDepartmentsCountText = (folderId: string) => {
     const folderForms = forms.filter(f => f.folderId === folderId);
-    if (folderForms.length === 0) return '0 Stations';
-    const hasAllStations = folderForms.some(f => !f.targetStations || f.targetStations.length === 0);
-    if (hasAllStations) {
-      return 'All Stations';
+    if (folderForms.length === 0) return '0 Departments';
+    const hasAll = folderForms.some(f => !f.targetNames || f.targetNames.length === 0);
+    if (hasAll) {
+      return 'All Departments';
     }
-    const stationsSet = new Set<string>();
+    const set = new Set<string>();
     folderForms.forEach(f => {
-      f.targetStations?.forEach(s => stationsSet.add(s));
+      f.targetNames?.forEach(s => set.add(s));
     });
-    const count = stationsSet.size;
-    return `${count} ${count === 1 ? 'Station' : 'Stations'}`;
+    const count = set.size;
+    return `${count} ${count === 1 ? 'Department' : 'Departments'}`;
   };
 
-  const getFolderTargetedStations = () => {
+  const getFolderTargetedDepartments = () => {
     const folderForms = forms.filter(f => f.folderId === selectedFolderId);
-    const hasAllStations = folderForms.some(f => !f.targetStations || f.targetStations.length === 0);
-    if (hasAllStations) {
-      return 'All Stations';
+    const hasAll = folderForms.some(f => !f.targetNames || f.targetNames.length === 0);
+    if (hasAll) {
+      return 'All Departments';
     }
-    const stationsSet = new Set<string>();
+    const set = new Set<string>();
     folderForms.forEach(f => {
-      f.targetStations?.forEach(s => stationsSet.add(s));
+      f.targetNames?.forEach(s => set.add(s));
     });
-    return Array.from(stationsSet);
+    return Array.from(set);
   };
 
   useEffect(() => {
@@ -99,10 +102,10 @@ const Dashboard = () => {
 
     // Socket listener for new forms
     socket.on('form_created', (newForm) => {
-      if (user?.role === 'USER') {
-        const isTargeted = !newForm.targetStations || 
-                          newForm.targetStations.length === 0 || 
-                          newForm.targetStations.map((e: string) => e.toLowerCase()).includes(user.email.toLowerCase());
+      if (user?.role === 'FACULTY') {
+        const isTargeted = !newForm.targetNames || 
+                          newForm.targetNames.length === 0 || 
+                          newForm.targetNames.map((e: string) => e.toLowerCase()).includes(user.email.toLowerCase());
         if (!isTargeted) return;
       }
       setForms(prev => [newForm, ...prev]);
@@ -115,7 +118,35 @@ const Dashboard = () => {
           return { 
             ...f, 
             _count: { ...f._count, responses: (f._count?.responses || 0) + 1 },
-            alreadyFilled: response.respondentId === user?.id ? true : f.alreadyFilled
+            alreadyFilled: response.respondentId === user?.id ? true : f.alreadyFilled,
+            responseStatus: response.respondentId === user?.id ? response.status : f.responseStatus
+          };
+        }
+        return f;
+      }));
+    });
+
+    socket.on('response_updated', (response) => {
+      setForms(prev => prev.map(f => {
+        if (f.id === response.formId) {
+          return {
+            ...f,
+            alreadyFilled: response.respondentId === user?.id ? true : f.alreadyFilled,
+            responseStatus: response.respondentId === user?.id ? response.status : f.responseStatus
+          };
+        }
+        return f;
+      }));
+    });
+
+    socket.on('response_reviewed', (response) => {
+      setForms(prev => prev.map(f => {
+        if (f.id === response.formId) {
+          return {
+            ...f,
+            alreadyFilled: response.respondentId === user?.id ? true : f.alreadyFilled,
+            responseStatus: response.respondentId === user?.id ? response.status : f.responseStatus,
+            rejectionComment: response.respondentId === user?.id ? response.rejectionComment : f.rejectionComment
           };
         }
         return f;
@@ -125,6 +156,8 @@ const Dashboard = () => {
     return () => {
       socket.off('new_response');
       socket.off('form_created');
+      socket.off('response_updated');
+      socket.off('response_reviewed');
     };
   }, [user]);
 
@@ -194,13 +227,19 @@ const Dashboard = () => {
     }
   };
 
-  const isOversight = user?.role === 'ADMIN' || user?.role === 'CCRB';
+  const isOversight = user?.role === 'IQAC_ADMIN' || user?.role === 'HOD';
 
   const filteredFormsList = forms.filter(form => {
     const matchesSearch = form.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           form.description.toLowerCase().includes(searchTerm.toLowerCase());
                           
     if (!matchesSearch) return false;
+
+    if (selectedLabelFilter) {
+      const targetEmail = `${selectedLabelFilter.toLowerCase()}@mail.com`;
+      const matchesLabel = form.targetNames && form.targetNames.some(name => name.toLowerCase() === targetEmail);
+      if (!matchesLabel) return false;
+    }
     
     if (!isOversight) {
       // Stations see all forms assigned to them directly
@@ -248,7 +287,7 @@ const Dashboard = () => {
             </div>
           </div>
           
-          {user?.role === 'ADMIN' && (
+          {user?.role === 'IQAC_ADMIN' && (
             <div style={{ position: 'relative' }}>
               <button
                 onClick={(e) => {
@@ -341,26 +380,23 @@ const Dashboard = () => {
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {form.alreadyFilled && (
-              <div 
-                title="Already Filled"
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  background: 'rgba(34, 197, 94, 0.2)', 
-                  color: '#22c55e', 
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%', 
-                  border: '1px solid rgba(34, 197, 94, 0.5)', 
-                  boxShadow: '0 0 10px rgba(34, 197, 94, 0.2)'
-                }}
-              >
-                <CheckCircle size={16} />
-              </div>
+            {form.alreadyFilled && form.responseStatus && (
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                padding: '4px 10px',
+                borderRadius: '20px',
+                background: form.responseStatus === 'APPROVED' ? 'rgba(34, 197, 94, 0.15)' : 
+                            form.responseStatus === 'REJECTED' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                color: form.responseStatus === 'APPROVED' ? '#22c55e' : 
+                       form.responseStatus === 'REJECTED' ? '#ef4444' : '#f59e0b',
+                border: '1px solid currentColor'
+              }}>
+                {form.responseStatus === 'PENDING' ? 'Pending HOD' : form.responseStatus}
+              </span>
             )}
-            {(user?.role === 'ADMIN' || user?.role === 'CCRB') && (
+            {isOversight && (
               <div 
                 title="Total Responses"
                 style={{ 
@@ -405,18 +441,18 @@ const Dashboard = () => {
               cursor: 'pointer'
             }}
           >
-            <span style={{ fontWeight: 'bold', opacity: 0.5, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Mentioned Stations</span>
-            {!form.targetStations || form.targetStations.length === 0 ? (
-              <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>All Stations</span>
+            <span style={{ fontWeight: 'bold', opacity: 0.5, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Target Departments</span>
+            {!form.targetNames || form.targetNames.length === 0 ? (
+              <span style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>All Departments</span>
             ) : (
               <div>
-                <span style={{ fontWeight: 'bold', color: 'var(--accent-primary)' }}>{form.targetStations.length}</span>{' '}
-                {form.targetStations.length === 1 ? 'Station' : 'Stations'}
+                <span style={{ fontWeight: 'bold', color: 'var(--accent-primary)' }}>{form.targetNames.length}</span>{' '}
+                {form.targetNames.length === 1 ? 'Department' : 'Departments'}
               </div>
             )}
 
             {/* Custom Tooltip on Hover */}
-            {hoveredFormTargetId === form.id && form.targetStations && form.targetStations.length > 0 && (
+            {hoveredFormTargetId === form.id && form.targetNames && form.targetNames.length > 0 && (
               <div style={{
                 position: 'absolute',
                 bottom: '100%',
@@ -437,9 +473,9 @@ const Dashboard = () => {
                 gap: '4px',
                 animation: 'fadeIn 0.15s ease forwards'
               }}>
-                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', opacity: 0.5, textTransform: 'uppercase' }}>Selected Stations List:</span>
+                <span style={{ fontSize: '0.65rem', fontWeight: 'bold', opacity: 0.5, textTransform: 'uppercase' }}>Selected Departments List:</span>
                 <span style={{ fontSize: '0.75rem', fontWeight: '700', opacity: 0.9, lineHeight: '1.3' }}>
-                  {form.targetStations.map(email => email.split('@')[0].toUpperCase()).join(', ')}
+                  {form.targetNames.map(email => email.split('@')[0].toUpperCase()).join(', ')}
                 </span>
                 {/* Small arrow */}
                 <div style={{
@@ -459,9 +495,9 @@ const Dashboard = () => {
         )}
 
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: 'auto' }}>
-          {(user?.role === 'USER') && (
+          {(user?.role === 'FACULTY') && (
             <Link 
-              to={`/officer/fill/${form.id}`} 
+              to={`/faculty/fill/${form.id}`} 
               className="btn-primary" 
               style={{ 
                 textDecoration: 'none', 
@@ -480,14 +516,17 @@ const Dashboard = () => {
                 fontSize: '0.75rem'
               }}
             >
-              <ArrowRight size={16} /> Fill Form
+              <ArrowRight size={16} /> 
+              {form.responseStatus === 'APPROVED' ? 'View Submitted' : 
+               form.responseStatus === 'REJECTED' ? 'Edit & Resubmit' : 
+               form.responseStatus === 'PENDING' ? 'Edit Response' : 'Fill Form'}
             </Link>
           )}
           
-          {(user?.role === 'ADMIN' || user?.role === 'CCRB') && (
+          {isOversight && (
             <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
               <Link 
-                to={`/officer/fill/${form.id}`} 
+                to={`/faculty/fill/${form.id}`} 
                 className="btn-primary" 
                 style={{ 
                   textDecoration: 'none', 
@@ -543,10 +582,68 @@ const Dashboard = () => {
       {/* Greetings Block - only shown on Home */}
       {selectedFolderId === 'home' && (
         <div style={{ marginBottom: '1.5rem' }}>
-          <h1 style={{ fontSize: '2.1rem', fontWeight: '700', marginBottom: '0.5rem', letterSpacing: '-0.01em' }}>Welcome, {user?.name}</h1>
-          <p style={{ opacity: 0.7, fontSize: '1.1rem' }}>{user?.role === 'ADMIN' ? 'Manage your organization forms and view responses.' : 'Access and fill organization forms.'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ fontSize: '2.1rem', fontWeight: '700', margin: '0 0 0.5rem 0', letterSpacing: '-0.01em' }}>
+              {user?.role === 'IQAC_ADMIN' ? 'IQAC Admin Page' : 'Faculty Page'}
+            </h1>
+            <span style={{
+              padding: '4px 10px',
+              borderRadius: '12px',
+              fontSize: '0.75rem',
+              fontWeight: 'bold',
+              background: 'rgba(37, 99, 235, 0.1)',
+              color: 'var(--accent-primary)',
+              marginBottom: '6px'
+            }}>
+              {user?.role === 'IQAC_ADMIN' ? 'Admin Access' : 'Faculty Access'}
+            </span>
+          </div>
+          <p style={{ opacity: 0.7, fontSize: '1.1rem', margin: 0 }}>Welcome back, {user?.name}. {user?.role === 'IQAC_ADMIN' ? 'Manage your organization forms and view responses.' : 'Access and fill organization forms.'}</p>
         </div>
       )}
+
+      {/* Label/Department Filter Pills */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', opacity: 0.6, marginRight: '0.5rem' }}>Filter by Department:</span>
+        <button
+          onClick={() => setSelectedLabelFilter(null)}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '20px',
+            border: '1px solid var(--border-color)',
+            background: selectedLabelFilter === null ? 'var(--accent-primary)' : 'var(--card-bg)',
+            color: selectedLabelFilter === null ? 'white' : 'var(--text-primary)',
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            transition: 'all 0.2s'
+          }}
+        >
+          All
+        </button>
+        {['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'MBA', 'MCA'].map(label => {
+          const isSelected = selectedLabelFilter === label;
+          return (
+            <button
+              key={label}
+              onClick={() => setSelectedLabelFilter(isSelected ? null : label)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '20px',
+                border: '1px solid var(--border-color)',
+                background: isSelected ? 'var(--accent-primary)' : 'var(--card-bg)',
+                color: isSelected ? 'white' : 'var(--text-primary)',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                transition: 'all 0.2s'
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Redesigned Glass-morphic Control Panel with Search and Create Button - ADMIN/CCRB and Home only */}
       {isOversight && selectedFolderId === 'home' && (
@@ -580,7 +677,7 @@ const Dashboard = () => {
             />
           </div>
 
-          {user?.role === 'ADMIN' && (
+          {user?.role === 'IQAC_ADMIN' && (
             <Link 
               to="/admin/create" 
               className="btn-primary" 
@@ -625,7 +722,7 @@ const Dashboard = () => {
             <div style={{ marginBottom: '2.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
                 <h2 style={{ fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.01em', margin: 0 }}>Folders</h2>
-                {user?.role === 'ADMIN' && (
+                {user?.role === 'IQAC_ADMIN' && (
                   <button
                     onClick={() => setShowNewFolderModal(true)}
                     style={{
@@ -657,7 +754,7 @@ const Dashboard = () => {
                   opacity: 0.6,
                   fontSize: '0.9rem'
                 }}>
-                  📂 No folders created yet. {user?.role === 'ADMIN' && 'Create one using the button above!'}
+                  📂 No folders created yet. {user?.role === 'IQAC_ADMIN' && 'Create one using the button above!'}
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))', gap: '1.25rem' }}>
@@ -711,7 +808,7 @@ const Dashboard = () => {
                             </div>
                           </div>
 
-                          {user?.role === 'ADMIN' && (
+                          {user?.role === 'IQAC_ADMIN' && (
                             <button
                               title="Delete Folder"
                               onClick={(e) => {

@@ -12,7 +12,8 @@ model User {
   email        String     @unique
   password     String
   name         String
-  role         Role       @default(USER)
+  role         Role       @default(FACULTY)
+  department   String?
   tokenVersion Int        @default(0)
   forms        Form[]
   responses    Response[]
@@ -31,9 +32,9 @@ model Log {
 }
 
 enum Role {
-  ADMIN
-  USER
-  CCRB
+  IQAC_ADMIN
+  HOD
+  FACULTY
 }
 
 model Form {
@@ -41,7 +42,7 @@ model Form {
   title          String
   description    String?
   schema         Json       // Array of field objects
-  targetStations String[]   @default([])
+  targetNames String[]   @default([])
   creator        User?      @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   creatorId      String?
   responses      Response[]
@@ -60,13 +61,15 @@ model Folder {
 }
 
 model Response {
-  id           String   @id @default(uuid())
-  form         Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
-  formId       String
-  respondent   User?    @relation(fields: [respondentId], references: [id], onDelete: SetNull)
-  respondentId String?
-  data         Json     // Field ID -> Value mapping
-  submittedAt  DateTime @default(now())
+  id               String   @id @default(uuid())
+  form             Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId           String
+  respondent       User?    @relation(fields: [respondentId], references: [id], onDelete: SetNull)
+  respondentId     String?
+  data             Json     // Field ID -> Value mapping
+  status           String   @default("PENDING")
+  rejectionComment String?
+  submittedAt      DateTime @default(now())
 }
 
 model Template {

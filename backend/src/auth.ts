@@ -30,22 +30,22 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 };
 
 export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if ((req as any).user?.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Admin access required' });
+  if ((req as any).user?.role !== 'IQAC_ADMIN') {
+    return res.status(403).json({ error: 'IQAC Admin access required' });
   }
   next();
 };
 
-export const isCCRB = (req: Request, res: Response, next: NextFunction) => {
-  if ((req as any).user?.role !== 'CCRB') {
-    return res.status(403).json({ error: 'CCRB access required' });
+export const isHOD = (req: Request, res: Response, next: NextFunction) => {
+  if ((req as any).user?.role !== 'HOD') {
+    return res.status(403).json({ error: 'HOD access required' });
   }
   next();
 };
 
 export const isOversight = (req: Request, res: Response, next: NextFunction) => {
   const role = (req as any).user?.role;
-  if (role !== 'ADMIN' && role !== 'CCRB') {
+  if (role !== 'IQAC_ADMIN' && role !== 'HOD') {
     return res.status(403).json({ error: 'Unauthorized oversight access' });
   }
   next();

@@ -21,13 +21,27 @@ import Landing from './pages/Landing';
 const ProtectedRoute = ({ children, adminOnly = false, oversightOnly = false }: { children: React.ReactNode, adminOnly?: boolean, oversightOnly?: boolean }) => {
   const { user } = useApp();
   if (!user) return <Navigate to="/login" />;
-  if (adminOnly && user.role !== 'ADMIN') return <Navigate to="/" />;
-  if (oversightOnly && user.role !== 'ADMIN' && user.role !== 'CCRB') return <Navigate to="/" />;
+  if (adminOnly && user.role !== 'IQAC_ADMIN') return <Navigate to="/" />;
+  if (oversightOnly && user.role !== 'IQAC_ADMIN' && user.role !== 'HOD') return <Navigate to="/" />;
   return <>{children}</>;
 };
 
 const AppContent = () => {
   const { user } = useApp();
+
+  React.useEffect(() => {
+    if (user) {
+      if (user.role === 'IQAC_ADMIN') {
+        document.title = 'IQAC Admin Page';
+      } else if (user.role === 'HOD') {
+        document.title = 'HOD Page';
+      } else if (user.role === 'FACULTY') {
+        document.title = 'Faculty Page';
+      }
+    } else {
+      document.title = 'IQAC One Data Portal';
+    }
+  }, [user]);
   
   return (
     <Router>
@@ -47,13 +61,12 @@ const AppContent = () => {
               <Route path="/admin/export" element={<ProtectedRoute oversightOnly><Export /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
               <Route path="/admin/submission/:id" element={<ProtectedRoute oversightOnly><ViewSubmission /></ProtectedRoute>} />
-              <Route path="/ccrb" element={<ProtectedRoute oversightOnly><CCRBDashboard /></ProtectedRoute>} />
-              <Route path="/ccrb/metrics" element={<ProtectedRoute oversightOnly><ManageMetrics /></ProtectedRoute>} />
+              <Route path="/hod" element={<ProtectedRoute oversightOnly><CCRBDashboard /></ProtectedRoute>} />
 
-              <Route path="/officer" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/officer/fill/:id" element={<ProtectedRoute><FormFiller /></ProtectedRoute>} />
-              <Route path="/officer/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-              <Route path="/officer/submission/:id" element={<ProtectedRoute><ViewSubmission /></ProtectedRoute>} />
+              <Route path="/faculty" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/faculty/fill/:id" element={<ProtectedRoute><FormFiller /></ProtectedRoute>} />
+              <Route path="/faculty/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+              <Route path="/faculty/submission/:id" element={<ProtectedRoute><ViewSubmission /></ProtectedRoute>} />
               
               <Route path="/" element={<Landing />} />
             </Routes>

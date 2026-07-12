@@ -19,7 +19,7 @@ interface Form {
   title: string;
   description: string;
   schema: Field[];
-  targetStations?: string[];
+  targetNames?: string[];
 }
 
 const FormFiller = () => {
@@ -29,19 +29,21 @@ const FormFiller = () => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
-  const [warning, setWarning] = useState('');
   const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
   const [isPreview, setIsPreview] = useState(false);
+  const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
+  const [responseStatus, setResponseStatus] = useState<string | null>(null);
+  const [rejectionComment, setRejectionComment] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleBack = () => {
-    if (user?.role === 'ADMIN') navigate('/admin');
-    else if (user?.role === 'CCRB') navigate('/ccrb');
-    else navigate('/officer');
+    if (user?.role === 'IQAC_ADMIN') navigate('/admin');
+    else if (user?.role === 'HOD') navigate('/hod');
+    else navigate('/faculty');
   };
 
   useEffect(() => {
-    const fetchForm = async () => {
+    const fetchFormAndResponse = async () => {
       const token = localStorage.getItem('token');
       if (!token) {
         setError('Authentication required');
@@ -50,7 +52,7 @@ const FormFiller = () => {
 
       try {
         const payload = JSON.parse(window.atob(token.split('.')[1]));
-        if (payload.role === 'ADMIN' || payload.role === 'CCRB') {
+        if (payload.role === 'IQAC_ADMIN' || payload.role === 'HOD') {
           setIsPreview(true);
         }
 
@@ -58,46 +60,51 @@ const FormFiller = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         setForm(res.data);
+
+        // Fetch existing response if any
+        try {
+          const respRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/forms/${id}/my-response`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (respRes.data) {
+            setExistingResponseId(respRes.data.id);
+            setFormData(respRes.data.data || {});
+            setResponseStatus(respRes.data.status);
+            setRejectionComment(respRes.data.rejectionComment);
+          }
+        } catch (respErr) {
+          console.error('Fetch response error:', respErr);
+        }
       } catch (err: any) {
         console.error('Fetch Form Error:', err);
         setError(err.response?.data?.error || 'Failed to load form details.');
       }
     };
-    fetchForm();
-  }, [id]);
-
-  useEffect(() => {
-    const checkStatus = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      try {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/forms`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const currentForm = res.data.find((f: any) => f.id === id);
-        if (currentForm?.alreadyFilled) {
-          setWarning('YOU ALREADY FILLED THIS FORM');
-        }
-      } catch (err) {
-        console.error('Status Check Error:', err);
-      }
-    };
-    checkStatus();
+    fetchFormAndResponse();
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPreview) return;
+    const isApproved = responseStatus === 'APPROVED';
+    const isFaculty = user?.role === 'FACULTY';
+    if (isApproved && isFaculty) return; // double check UI lock
+
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/forms/${id}/submit`,
-        { data: formData },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      if (existingResponseId) {
+        await axios.put(`${import.meta.env.VITE_API_URL}/api/responses/${existingResponseId}`,
+          { data: formData },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } else {
+        await axios.post(`${import.meta.env.VITE_API_URL}/api/forms/${id}/submit`,
+          { data: formData },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
       setSubmitted(true);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to submit form');
+      setError(err.response?.data?.error || 'Failed to submit response');
     }
   };
 
@@ -109,8 +116,8 @@ const FormFiller = () => {
     return (
       <div className="container animate-fade" style={{ textAlign: 'center', paddingTop: '5rem' }}>
         <CheckCircle size={64} style={{ color: 'green', marginBottom: '1.5rem' }} />
-        <h1>Form Submitted Successfully</h1>
-        <p style={{ marginBottom: '2rem', opacity: 0.7 }}>Your response has been recorded.</p>
+        <h1>Response Submitted Successfully</h1>
+        <p style={{ marginBottom: '2rem', opacity: 0.7 }}>Your response details have been updated and sent for review.</p>
         <button onClick={handleBack} className="btn-primary">Return to Dashboard</button>
       </div>
     );
@@ -139,6 +146,9 @@ const FormFiller = () => {
     );
   }
 
+  const isApproved = responseStatus === 'APPROVED';
+  const isDisabled = isPreview ? (user?.role !== 'IQAC_ADMIN') : (isApproved && user?.role !== 'IQAC_ADMIN');
+
   return (
     <div className="animate-fade" style={{ padding: '2rem', minHeight: '100vh', paddingBottom: '5rem' }}>
       <div className="container" style={{ maxWidth: '50rem', padding: 0 }}>
@@ -162,39 +172,36 @@ const FormFiller = () => {
           <ArrowLeft size={18} /> Back to Dashboard
         </button>
 
-
-
         {form && (
           <>
-
             <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h1 style={{ fontSize: '2.1rem', fontWeight: '700', marginBottom: '0.5rem', letterSpacing: '-0.01em' }}>{form.title}</h1>
                 <p style={{ opacity: 0.7, fontSize: '1.1rem' }}>{form.description || 'Please fill out all the required fields in this official document.'}</p>
               </div>
-              {warning && (
+              {isApproved && (
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.6rem',
-                  color: '#4ade80',
-                  background: 'rgba(74, 222, 128, 0.15)',
+                  color: '#22c55e',
+                  background: 'rgba(34, 197, 94, 0.15)',
                   padding: '8px 16px',
                   borderRadius: '20px',
-                  border: '1px solid rgba(74, 222, 128, 0.4)',
+                  border: '1px solid rgba(34, 197, 94, 0.4)',
                   fontSize: '0.85rem',
                   fontWeight: '900',
                   textTransform: 'uppercase',
                   letterSpacing: '1px',
-                  boxShadow: '0 4px 12px rgba(74, 222, 128, 0.15)'
+                  boxShadow: '0 4px 12px rgba(34, 197, 94, 0.15)'
                 }}>
-                  <CheckCircle size={16} /> <span>Already Filled</span>
+                  <CheckCircle size={16} /> <span>Approved & Locked</span>
                 </div>
               )}
             </div>
 
-            {/* Targeted Stations display for Admins/CCRB */}
-            {(user?.role === 'ADMIN' || user?.role === 'CCRB') && (
+            {/* Targeted Departments/Faculty */}
+            {(user?.role === 'IQAC_ADMIN' || user?.role === 'HOD') && (
               <div style={{
                 background: 'var(--card-bg)',
                 border: '1.5px solid var(--accent-primary)',
@@ -204,9 +211,9 @@ const FormFiller = () => {
                 boxShadow: '0 4px 12px rgba(37, 99, 235, 0.05)'
               }}>
                 <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.5px' }}>
-                  Stations to fill this Form
+                  Targeted Departments
                 </h3>
-                {!form.targetStations || form.targetStations.length === 0 ? (
+                {!form.targetNames || form.targetNames.length === 0 ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{
                       fontSize: '0.8rem',
@@ -217,13 +224,13 @@ const FormFiller = () => {
                       borderRadius: '6px',
                       border: '1px solid rgba(37, 99, 235, 0.2)'
                     }}>
-                      🌐 ALL STATIONS
+                      🌐 ALL DEPARTMENTS
                     </span>
-                    <span style={{ fontSize: '0.85rem', opacity: 0.6, fontWeight: '500' }}>This form has been opened globally for all stations to fill out.</span>
+                    <span style={{ fontSize: '0.85rem', opacity: 0.6, fontWeight: '500' }}>This form is opened globally for all faculty and departments.</span>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    {form.targetStations.map((stationEmail, index) => (
+                    {form.targetNames.map((nameEmail, index) => (
                       <span
                         key={index}
                         style={{
@@ -241,7 +248,7 @@ const FormFiller = () => {
                         }}
                       >
                         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-primary)' }} />
-                        {stationEmail.split('@')[0].toUpperCase()}
+                        {nameEmail.split('@')[0].toUpperCase()}
                       </span>
                     ))}
                   </div>
@@ -249,25 +256,72 @@ const FormFiller = () => {
               </div>
             )}
 
-            {error && (
+            {/* Status Banners */}
+            {responseStatus === 'APPROVED' && (
               <div style={{
-                padding: '1rem',
-                background: 'rgba(239, 68, 68, 0.1)',
-                color: '#ef4444',
-                borderRadius: '10px',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                marginBottom: '2rem',
+                padding: '1.25rem 1.5rem',
+                background: 'rgba(34, 197, 94, 0.1)',
+                color: '#22c55e',
+                borderRadius: '12px',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                marginBottom: '1.5rem',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.75rem',
-                fontWeight: '600'
+                fontWeight: 'bold',
+                fontSize: '0.95rem'
               }}>
-                <AlertCircle size={20} />
-                {error}
+                <CheckCircle size={20} />
+                <span>APPROVED: This response has been accepted and locked. Faculty can no longer edit. {user?.role === 'IQAC_ADMIN' && " (IQAC Admin Override Allowed)"}</span>
               </div>
             )}
 
-            {isPreview && (
+            {responseStatus === 'REJECTED' && (
+              <div style={{
+                padding: '1.25rem 1.5rem',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                borderRadius: '12px',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+                fontWeight: 'bold',
+                fontSize: '0.95rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <AlertCircle size={20} />
+                  <span>REJECTED BY HOD: Please update your response and resubmit.</span>
+                </div>
+                {rejectionComment && (
+                  <div style={{ fontSize: '0.85rem', opacity: 0.9, background: 'rgba(239, 68, 68, 0.05)', padding: '8px 12px', borderRadius: '6px', borderLeft: '3px solid #ef4444', marginTop: '4px' }}>
+                    <strong>HOD Feedback Comments:</strong> "{rejectionComment}"
+                  </div>
+                )}
+              </div>
+            )}
+
+            {responseStatus === 'PENDING' && (
+              <div style={{
+                padding: '1.25rem 1.5rem',
+                background: 'rgba(245, 158, 11, 0.1)',
+                color: '#f59e0b',
+                borderRadius: '12px',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                fontWeight: 'bold',
+                fontSize: '0.95rem'
+              }}>
+                <AlertCircle size={20} />
+                <span>PENDING REVIEW: Submitted response is currently awaiting review by HOD. You can still modify and resubmit.</span>
+              </div>
+            )}
+
+            {isPreview && !responseStatus && (
               <div style={{
                 padding: '1.25rem 1.5rem',
                 background: 'rgba(59, 130, 246, 0.1)',
@@ -282,12 +336,11 @@ const FormFiller = () => {
                 fontSize: '0.95rem'
               }}>
                 <AlertCircle size={20} />
-                <span>⚠️ Preview Mode: You are viewing this form as an administrator/oversight user. Submission is disabled.</span>
+                <span>Preview Mode: You are viewing this form as HOD/Administrator. Submission is disabled.</span>
               </div>
             )}
 
             <div style={{ background: 'var(--card-bg)', padding: '2.5rem', borderRadius: '1rem', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
-
               <form onSubmit={handleSubmit}>
                 {form.schema.map(field => (
                   <div key={field.id} style={{ marginBottom: '2rem' }}>
@@ -299,6 +352,8 @@ const FormFiller = () => {
                       <input
                         className="input"
                         required={field.required}
+                        disabled={isDisabled}
+                        value={formData[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                       />
                     )}
@@ -308,6 +363,8 @@ const FormFiller = () => {
                         type="number"
                         className="input"
                         required={field.required}
+                        disabled={isDisabled}
+                        value={formData[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                       />
                     )}
@@ -317,6 +374,29 @@ const FormFiller = () => {
                         className="input"
                         rows={4}
                         required={field.required}
+                        disabled={isDisabled}
+                        value={formData[field.id] || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                      />
+                    {field.type === 'url' && (
+                      <input
+                        type="url"
+                        className="input"
+                        required={field.required}
+                        disabled={isDisabled}
+                        placeholder="https://example.com"
+                        value={formData[field.id] || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                      />
+                    )}
+
+                    {field.type === 'date' && (
+                      <input
+                        type="date"
+                        className="input"
+                        required={field.required}
+                        disabled={isDisabled}
+                        value={formData[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                       />
                     )}
@@ -325,6 +405,8 @@ const FormFiller = () => {
                       <select
                         className="input"
                         required={field.required}
+                        disabled={isDisabled}
+                        value={formData[field.id] || ''}
                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                       >
                         <option value="">Select an option</option>
@@ -338,7 +420,8 @@ const FormFiller = () => {
                           id={`file-${field.id}`}
                           type="file"
                           className="input"
-                          required={field.required}
+                          required={field.required && !formData[field.id]}
+                          disabled={isDisabled}
                           accept={field.allowedTypes?.map((t: any) => {
                             if (t === 'PDF') return '.pdf';
                             if (t === 'IMAGE') return 'image/*';
@@ -367,7 +450,7 @@ const FormFiller = () => {
 
                               if (!pdfOk && !imgOk && !sheetOk && !vidOk) {
                                 alert(`Error: This field only accepts: ${allowed.join(', ')}`);
-                                e.target.value = ''; // Clear the input
+                                e.target.value = '';
                                 handleInputChange(field.id, '');
                                 return;
                               }
@@ -415,6 +498,19 @@ const FormFiller = () => {
                             Allowed: {field.allowedTypes.join(', ')}
                           </div>
                         )}
+                        {formData[field.id]?.url && (
+                          <div style={{ marginTop: '0.6rem', fontSize: '0.85rem' }}>
+                            Submitted Attachment:{' '}
+                            <a 
+                              href={formData[field.id].url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ color: 'var(--accent-primary)', fontWeight: 'bold', textDecoration: 'underline' }}
+                            >
+                              {formData[field.id].filename || 'View attachment'}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -428,12 +524,12 @@ const FormFiller = () => {
                     padding: '14px',
                     fontSize: '1.1rem',
                     marginTop: '1rem',
-                    background: isPreview ? '#6b7280' : ((error || Object.values(loadingFiles).some(v => v)) ? '#9ca3af' : '#1e40af'),
-                    cursor: isPreview ? 'not-allowed' : ((error || Object.values(loadingFiles).some(v => v)) ? 'not-allowed' : 'pointer')
+                    background: isDisabled ? '#6b7280' : ((Object.values(loadingFiles).some(v => v)) ? '#9ca3af' : '#1e40af'),
+                    cursor: isDisabled ? 'not-allowed' : ((Object.values(loadingFiles).some(v => v)) ? 'not-allowed' : 'pointer')
                   }}
-                  disabled={isPreview || !!error || Object.values(loadingFiles).some(v => v)}
+                  disabled={isDisabled || Object.values(loadingFiles).some(v => v)}
                 >
-                  {Object.values(loadingFiles).some(v => v) ? 'Waiting for uploads...' : (isPreview ? 'Preview Mode Only (Submission Disabled)' : 'Submit Response')}
+                  {Object.values(loadingFiles).some(v => v) ? 'Waiting for uploads...' : (isDisabled ? 'LOCKED / VIEW ONLY MODE' : 'Submit Response')}
                 </button>
               </form>
             </div>
@@ -445,5 +541,3 @@ const FormFiller = () => {
 };
 
 export default FormFiller;
-
-

@@ -7,9 +7,21 @@ interface UserData {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'USER';
+  role: 'IQAC_ADMIN' | 'HOD' | 'FACULTY';
+  department?: string | null;
   createdAt: string;
 }
+
+const departmentsList = [
+  { code: 'CSE', name: 'Computer Science & Engineering' },
+  { code: 'ECE', name: 'Electronics & Communication Engineering' },
+  { code: 'EEE', name: 'Electrical & Electronics Engineering' },
+  { code: 'MECH', name: 'Mechanical Engineering' },
+  { code: 'CIVIL', name: 'Civil Engineering' },
+  { code: 'IT', name: 'Information Technology' },
+  { code: 'MBA', name: 'Master of Business Administration' },
+  { code: 'MCA', name: 'Master of Computer Applications' }
+];
 
 const Users = () => {
   const [users, setUsers] = useState<UserData[]>([]);
@@ -23,7 +35,8 @@ const Users = () => {
     name: '',
     email: '',
     password: '',
-    role: 'USER' as 'ADMIN' | 'USER'
+    role: 'FACULTY' as 'IQAC_ADMIN' | 'HOD' | 'FACULTY',
+    department: ''
   });
 
   const fetchUsers = async () => {
@@ -59,7 +72,7 @@ const Users = () => {
       }
       setShowModal(false);
       setEditingUser(null);
-      setFormData({ name: '', email: '', password: '', role: 'USER' });
+      setFormData({ name: '', email: '', password: '', role: 'FACULTY', department: '' });
       fetchUsers();
     } catch (err) {
       console.error(err);
@@ -87,7 +100,8 @@ const Users = () => {
       name: user.name,
       email: user.email,
       password: '', // Don't show password
-      role: user.role
+      role: user.role,
+      department: user.department || ''
     });
     setShowModal(true);
   };
@@ -106,7 +120,7 @@ const Users = () => {
           <p style={{ opacity: 0.7, fontSize: '1.1rem' }}>Manage organizational accounts and access permissions.</p>
         </div>
         <button 
-          onClick={() => { setEditingUser(null); setFormData({ name: '', email: '', password: '', role: 'USER' }); setShowModal(true); }}
+          onClick={() => { setEditingUser(null); setFormData({ name: '', email: '', password: '', role: 'FACULTY', department: '' }); setShowModal(true); }}
           className="btn-primary" 
           style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1.5rem', borderRadius: '10px' }}
         >
@@ -130,8 +144,8 @@ const Users = () => {
             <Shield size={24} />
           </div>
           <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{users.filter(u => u.role === 'ADMIN').length}</div>
-            <div style={{ fontSize: '0.85rem', opacity: 0.6 }}>Administrators</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{users.filter(u => u.role === 'IQAC_ADMIN').length}</div>
+            <div style={{ fontSize: '0.85rem', opacity: 0.6 }}>IQAC Administrators</div>
           </div>
         </div>
       </div>
@@ -157,6 +171,7 @@ const Users = () => {
               <tr style={{ background: 'rgba(0,0,0,0.02)', textAlign: 'left' }}>
                 <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', opacity: 0.6 }}>User Details</th>
                 <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', opacity: 0.6 }}>Role</th>
+                <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', opacity: 0.6 }}>Department</th>
                 <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', opacity: 0.6 }}>Created On</th>
                 <th style={{ padding: '1rem 1.5rem', textAlign: 'right', fontSize: '0.85rem', opacity: 0.6 }}>Actions</th>
               </tr>
@@ -181,11 +196,16 @@ const Users = () => {
                       borderRadius: '6px', 
                       fontSize: '0.75rem', 
                       fontWeight: 'bold',
-                      background: u.role === 'ADMIN' ? 'rgba(37, 99, 235, 0.1)' : 'rgba(0,0,0,0.05)',
-                      color: u.role === 'ADMIN' ? 'var(--accent-primary)' : 'inherit'
+                      background: u.role === 'IQAC_ADMIN' ? 'rgba(37, 99, 235, 0.1)' : 
+                                  u.role === 'HOD' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(0,0,0,0.05)',
+                      color: u.role === 'IQAC_ADMIN' ? 'var(--accent-primary)' : 
+                             u.role === 'HOD' ? '#10b981' : 'inherit'
                     }}>
                       {u.role}
                     </span>
+                  </td>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.9rem', fontWeight: '600' }}>
+                    {u.department || <span style={{ opacity: 0.3 }}>—</span>}
                   </td>
                   <td style={{ padding: '1rem 1.5rem', fontSize: '0.9rem' }}>
                     {format(new Date(u.createdAt), 'MMM dd, yyyy')}
@@ -248,17 +268,37 @@ const Users = () => {
                   onChange={e => setFormData({ ...formData, password: e.target.value })} 
                 />
               </div>
-              <div style={{ marginBottom: '2rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Account Role</label>
                 <select 
                   className="input" 
                   value={formData.role} 
-                  onChange={e => setFormData({ ...formData, role: e.target.value as 'ADMIN' | 'USER' })}
+                  onChange={e => {
+                    const newRole = e.target.value as any;
+                    setFormData({ ...formData, role: newRole, department: newRole === 'IQAC_ADMIN' ? '' : formData.department });
+                  }}
                 >
-                  <option value="USER">Officer (Access to forms and history)</option>
-                  <option value="ADMIN">Administrator (Full system access)</option>
+                  <option value="FACULTY">Faculty (Fill and edit forms)</option>
+                  <option value="HOD">HOD (View and approve/reject responses)</option>
+                  <option value="IQAC_ADMIN">IQAC Admin (Full system access)</option>
                 </select>
               </div>
+              {(formData.role === 'FACULTY' || formData.role === 'HOD') && (
+                <div style={{ marginBottom: '2rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Department</label>
+                  <select 
+                    className="input" 
+                    required
+                    value={formData.department} 
+                    onChange={e => setFormData({ ...formData, department: e.target.value })}
+                  >
+                    <option value="">Select Department...</option>
+                    {departmentsList.map(d => (
+                      <option key={d.code} value={d.code}>{d.name} ({d.code})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button type="button" onClick={() => setShowModal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border-color)', color: 'inherit' }}>Cancel</button>
                 <button type="submit" className="btn-primary" style={{ flex: 1, padding: '0.75rem', borderRadius: '8px' }}>{editingUser ? 'Update Account' : 'Create Account'}</button>

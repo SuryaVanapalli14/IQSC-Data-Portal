@@ -57,10 +57,10 @@ const Login = () => {
         position: 'relative'
       }}>
         <div style={{ marginBottom: '2.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1rem' }}>
-          <img src="/ap_police.png" alt="AP Police" style={{ height: '64px', width: 'auto' }} />
+          <img src="/nri_logo.png" alt="NRI Logo" style={{ height: '64px', width: 'auto' }} />
           <div>
             <h1 style={{ fontSize: '1.8rem', fontWeight: '900', margin: 0, color: 'var(--text-primary)', letterSpacing: '1px' }}>
-              POLICE FORMS
+              IQAC ONE DATA PORTAL
             </h1>
             <p style={{ margin: 0, opacity: 0.5, fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '2px' }}>
               Demo Access
@@ -98,7 +98,7 @@ const Login = () => {
               <input
                 type="email"
                 className="input"
-                placeholder="officer@police.gov"
+                placeholder="faculty@mail.com"
                 style={{ paddingLeft: '42px', marginBottom: 0 }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

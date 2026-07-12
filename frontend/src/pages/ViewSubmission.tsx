@@ -130,7 +130,7 @@ const ViewSubmission = () => {
 
         <div style={{ display: 'flex', gap: '1rem' }}>
            <button 
-            onClick={() => navigate(`/officer/fill/${submission.form.id}`)}
+            onClick={() => navigate(`/faculty/fill/${submission.form.id}`)}
             style={{ 
               display: 'flex', 
               alignItems: 'center', 
@@ -292,6 +292,15 @@ const ViewSubmission = () => {
                         </a>
                       </div>
                     </div>
+                  ) : field.type === 'url' && submission.data[field.id] ? (
+                    <a 
+                      href={submission.data[field.id].startsWith('http') ? submission.data[field.id] : `https://${submission.data[field.id]}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      style={{ color: 'var(--accent-primary)', textDecoration: 'underline', fontWeight: 'bold' }}
+                    >
+                      {submission.data[field.id]}
+                    </a>
                   ) : (
                     submission.data[field.id] || <span style={{ opacity: 0.3 }}>Not provided</span>
                   )}

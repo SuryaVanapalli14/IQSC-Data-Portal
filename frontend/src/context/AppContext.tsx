@@ -21,7 +21,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'USER' | 'CCRB';
+  role: 'IQAC_ADMIN' | 'FACULTY' | 'HOD';
 }
 
 interface AppContextType {
