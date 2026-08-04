@@ -304,7 +304,12 @@ app.get('/api/admin/pending-tracker', authenticate, isOversight, async (req: Req
       orderBy: { submittedAt: 'asc' }
     });
 
-    res.json(pendingResponses);
+    const hods = await prisma.user.findMany({
+      where: { role: 'HOD' },
+      select: { id: true, name: true, email: true, department: true }
+    });
+
+    res.json({ responses: pendingResponses, hods });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch pending tracker data' });
   }

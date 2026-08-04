@@ -651,7 +651,7 @@ const Dashboard = () => {
         </div>
       </div>
     );
-  };
+  const availableLabels = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'MBA', 'MCA'];
 
   return (
     <div className="container animate-fade">
