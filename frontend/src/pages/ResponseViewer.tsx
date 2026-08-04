@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, User, Calendar, FileSpreadsheet, Eye, X, FileText } from 'lucide-react';
+import { ArrowLeft, User, Calendar, FileSpreadsheet, Eye, X, FileText, Trash2 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useApp } from '../context/AppContext';
 import { format } from 'date-fns';
@@ -151,6 +151,26 @@ const ResponseViewer = () => {
     } catch (err) {
       console.error('Admin edit failed:', err);
       alert('Failed to save changes.');
+    }
+  };
+
+  const handleDeleteResponse = async (responseId: string) => {
+    if (!window.confirm('Are you sure you want to delete this response submission? This action cannot be undone.')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${import.meta.env.VITE_API_URL}/api/responses/${responseId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setForm(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          responses: prev.responses.filter(r => r.id !== responseId)
+        };
+      });
+    } catch (err) {
+      console.error('Failed to delete response:', err);
+      alert('Failed to delete response.');
     }
   };
 
@@ -407,12 +427,22 @@ const ResponseViewer = () => {
                         </>
                       )}
                       {user?.role === 'IQAC_ADMIN' && (
-                        <button
-                          onClick={() => setEditingResponse({ id: resp.id, data: { ...resp.data } })}
-                          style={{ padding: '5px 10px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}
-                        >
-                          ✏️ Edit
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setEditingResponse({ id: resp.id, data: { ...resp.data } })}
+                            style={{ padding: '5px 10px', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}
+                            title="Edit Response"
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteResponse(resp.id)}
+                            style={{ padding: '5px 8px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                            title="Delete Response Submission"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
                       )}
                       {resp.status !== 'PENDING' && user?.role !== 'IQAC_ADMIN' && (
                         <span style={{ fontSize: '0.75rem', opacity: 0.45, fontStyle: 'italic' }}>Reviewed</span>

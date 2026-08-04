@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, FileText, Download, History, ClipboardList, ChevronLeft, ChevronRight, LogOut, User, Users, Sliders } from 'lucide-react';
+import { LayoutDashboard, FileText, Download, History, ClipboardList, ChevronLeft, ChevronRight, LogOut, User, Users, Sliders, Clock } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -12,6 +12,7 @@ const Sidebar = () => {
   const adminLinks = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'User Management', path: '/admin/users', icon: Users },
+    { name: 'HOD Tracker', path: '/admin/pending-tracker', icon: Clock },
     { name: 'Audit Logs', path: '/admin/logs', icon: FileText },
     { name: 'Export Data', path: '/admin/export', icon: Download },
   ];

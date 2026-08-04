@@ -36,8 +36,10 @@ const FormFiller = () => {
   const [responseStatus, setResponseStatus] = useState<string | null>(null);
   const [rejectionComment, setRejectionComment] = useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [deptConfirmed, setDeptConfirmed] = useState(false);
+  const [selectedDept, setSelectedDept] = useState<string>(user?.department || '');
   const navigate = useNavigate();
+
+  const AVAILABLE_DEPARTMENTS = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'MBA', 'MCA'];
 
   const handleBack = () => {
     if (user?.role === 'IQAC_ADMIN') navigate('/admin');
@@ -93,7 +95,7 @@ const FormFiller = () => {
     if (isApproved && isFaculty) return;
 
     if (user?.role === 'FACULTY') {
-      setDeptConfirmed(false);
+      setSelectedDept(user?.department || (AVAILABLE_DEPARTMENTS.includes(user?.department || '') ? user?.department : 'CSE'));
       setShowPreviewModal(true);
     } else {
       executeSubmit();
@@ -584,29 +586,40 @@ const FormFiller = () => {
               Please review your entered details carefully before forwarding to your Department HOD.
             </p>
 
-            {/* Department Confirmation Box */}
+            {/* Department Selection Dropdown */}
             <div style={{
               background: 'rgba(37, 99, 235, 0.08)',
               border: '1px solid rgba(37, 99, 235, 0.3)',
-              borderRadius: '10px',
-              padding: '1rem 1.25rem',
+              borderRadius: '12px',
+              padding: '1.25rem',
               marginBottom: '1.5rem'
             }}>
-              <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.4rem', color: 'var(--accent-primary)' }}>
+              <label style={{ fontWeight: '800', fontSize: '0.9rem', display: 'block', marginBottom: '0.4rem', color: 'var(--accent-primary)' }}>
                 🏢 Department Confirmation
-              </div>
-              <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', opacity: 0.8 }}>
-                Submitting for: <strong>{user?.department || 'General'} Department</strong>
-              </p>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={deptConfirmed}
-                  onChange={e => setDeptConfirmed(e.target.checked)}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                />
-                <span>I confirm that I belong to the {user?.department || 'General'} Department and all entered details are accurate.</span>
               </label>
+              <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', opacity: 0.8 }}>
+                Select and confirm your department before forwarding your response to HOD:
+              </p>
+              <select
+                value={selectedDept}
+                onChange={e => setSelectedDept(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--card-bg)',
+                  color: 'var(--text-primary)',
+                  fontWeight: '700',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="" disabled>-- Select Department --</option>
+                {AVAILABLE_DEPARTMENTS.map(dept => (
+                  <option key={dept} value={dept}>{dept} Department</option>
+                ))}
+              </select>
             </div>
 
             {/* Summary Preview List */}
@@ -647,16 +660,16 @@ const FormFiller = () => {
               <button
                 type="button"
                 onClick={executeSubmit}
-                disabled={!deptConfirmed}
+                disabled={!selectedDept}
                 style={{
                   padding: '10px 20px',
                   borderRadius: '8px',
-                  background: deptConfirmed ? 'var(--accent-primary)' : 'gray',
+                  background: selectedDept ? 'var(--accent-primary)' : 'gray',
                   color: 'white',
                   border: 'none',
                   fontWeight: 'bold',
-                  cursor: deptConfirmed ? 'pointer' : 'not-allowed',
-                  opacity: deptConfirmed ? 1 : 0.6
+                  cursor: selectedDept ? 'pointer' : 'not-allowed',
+                  opacity: selectedDept ? 1 : 0.6
                 }}
               >
                 Confirm & Submit

@@ -615,6 +615,28 @@ app.put('/api/responses/:id', authenticate, async (req: Request, res: Response) 
   }
 });
 
+app.delete('/api/responses/:id', authenticate, isAdmin, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  try {
+    const existing = await prisma.response.findUnique({
+      where: { id: req.params.id },
+      include: { form: true }
+    });
+    if (!existing) return res.status(404).json({ error: 'Response not found' });
+
+    await prisma.response.delete({
+      where: { id: req.params.id }
+    });
+
+    io.to(existing.formId).emit('response_deleted', { id: req.params.id });
+
+    await createLog(user.userId, 'RESPONSE_DELETED', `Response ${req.params.id} for form "${existing.form.title}" deleted by IQAC Admin`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete response' });
+  }
+});
+
 app.post('/api/responses/:id/review', authenticate, isOversight, async (req: Request, res: Response) => {
   const { status, comment } = req.body; // APPROVED or REJECTED
   const user = (req as any).user;

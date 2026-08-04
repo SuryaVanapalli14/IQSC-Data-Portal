@@ -678,161 +678,45 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* IQAC Admin HOD Pending Tracker Card */}
-      {user?.role === 'IQAC_ADMIN' && selectedFolderId === 'home' && (
-        <div style={{
-          background: 'var(--card-bg)',
-          borderRadius: '16px',
-          border: '1.5px solid var(--border-color)',
-          padding: '1.5rem',
-          marginBottom: '2rem',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ padding: '10px', background: 'rgba(245, 158, 11, 0.12)', color: '#d97706', borderRadius: '12px' }}>
-                <Clock size={22} />
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800' }}>
-                  ⏳ HOD Pending Submissions Tracker
-                </h3>
-                <p style={{ margin: '2px 0 0 0', fontSize: '0.85rem', opacity: 0.7 }}>
-                  Track faculty submissions currently stopped/pending at HOD level awaiting review.
-                </p>
-              </div>
-            </div>
-            <span style={{
-              background: pendingTracker.length > 0 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-              color: pendingTracker.length > 0 ? '#d97706' : '#22c55e',
-              border: pendingTracker.length > 0 ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(34, 197, 94, 0.3)',
+      {/* Label/Department Filter Pills (Only for IQAC Admin) */}
+      {user?.role === 'IQAC_ADMIN' && (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 'bold', opacity: 0.6, marginRight: '0.5rem' }}>Filter by Department:</span>
+          <button
+            onClick={() => setSelectedLabelFilter(null)}
+            style={{
               padding: '6px 14px',
               borderRadius: '20px',
-              fontWeight: '800',
+              border: selectedLabelFilter === null ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)',
+              background: selectedLabelFilter === null ? 'var(--accent-primary)' : 'var(--card-bg)',
+              color: selectedLabelFilter === null ? 'white' : 'var(--text-primary)',
               fontSize: '0.8rem',
-              letterSpacing: '0.5px'
-            }}>
-              {pendingTracker.length} Pending at HOD
-            </span>
-          </div>
-
-          {pendingTracker.length === 0 ? (
-            <div style={{
-              padding: '1.5rem',
-              textAlign: 'center',
-              background: 'var(--bg-primary)',
-              borderRadius: '10px',
-              border: '1px dashed var(--border-color)',
-              opacity: 0.7,
-              fontSize: '0.9rem'
-            }}>
-              ✅ All clear! No faculty submissions are currently pending approval at HOD level.
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.02)' }}>
-                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', textTransform: 'uppercase', opacity: 0.6 }}>Form Title</th>
-                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', textTransform: 'uppercase', opacity: 0.6 }}>Faculty Member</th>
-                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', textTransform: 'uppercase', opacity: 0.6 }}>Department</th>
-                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', textTransform: 'uppercase', opacity: 0.6 }}>Submitted On</th>
-                    <th style={{ padding: '0.75rem 1rem', fontSize: '0.75rem', textTransform: 'uppercase', opacity: 0.6, textAlign: 'right' }}>Pending Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingTracker.map((item: any) => {
-                    const elapsedMs = new Date().getTime() - new Date(item.submittedAt).getTime();
-                    const hoursAgo = Math.floor(elapsedMs / (1000 * 60 * 60));
-                    const daysAgo = Math.floor(hoursAgo / 24);
-                    const pendingText = daysAgo > 0 ? `${daysAgo} day${daysAgo > 1 ? 's' : ''} ago` : hoursAgo > 0 ? `${hoursAgo} hour${hoursAgo > 1 ? 's' : ''} ago` : 'Just now';
-
-                    return (
-                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 'bold' }}>{item.form?.title || 'Form'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <div>{item.respondent?.name || 'Anonymous'}</div>
-                          <div style={{ fontSize: '0.75rem', opacity: 0.5 }}>{item.respondent?.email}</div>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <span style={{
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            background: 'rgba(37, 99, 235, 0.1)',
-                            color: 'var(--accent-primary)',
-                            fontWeight: 'bold',
-                            fontSize: '0.75rem'
-                          }}>
-                            {item.respondent?.department || 'General'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', opacity: 0.8 }}>
-                          {new Date(item.submittedAt).toLocaleDateString()} {new Date(item.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                          <span style={{
-                            background: daysAgo >= 2 ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                            color: daysAgo >= 2 ? '#ef4444' : '#d97706',
-                            padding: '4px 10px',
-                            borderRadius: '12px',
-                            fontWeight: 'bold',
-                            fontSize: '0.75rem'
-                          }}>
-                            ⏱️ {pendingText}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Label/Department Filter Pills */}
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem', alignItems: 'center' }}>
-        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', opacity: 0.6, marginRight: '0.5rem' }}>Filter by Department:</span>
-        <button
-          onClick={() => setSelectedLabelFilter(null)}
-          style={{
-            padding: '6px 14px',
-            borderRadius: '20px',
-            border: '1px solid var(--border-color)',
-            background: selectedLabelFilter === null ? 'var(--accent-primary)' : 'var(--card-bg)',
-            color: selectedLabelFilter === null ? 'white' : 'var(--text-primary)',
-            fontSize: '0.8rem',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            transition: 'all 0.2s'
-          }}
-        >
-          All
-        </button>
-        {['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'MBA', 'MCA'].map(label => {
-          const isSelected = selectedLabelFilter === label;
-          return (
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            All Departments
+          </button>
+          {availableLabels.map(label => (
             <button
               key={label}
-              onClick={() => setSelectedLabelFilter(isSelected ? null : label)}
+              onClick={() => setSelectedLabelFilter(selectedLabelFilter === label ? null : label)}
               style={{
                 padding: '6px 14px',
                 borderRadius: '20px',
-                border: '1px solid var(--border-color)',
-                background: isSelected ? 'var(--accent-primary)' : 'var(--card-bg)',
-                color: isSelected ? 'white' : 'var(--text-primary)',
+                border: selectedLabelFilter === label ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                background: selectedLabelFilter === label ? 'var(--accent-primary)' : 'var(--card-bg)',
+                color: selectedLabelFilter === label ? 'white' : 'var(--text-primary)',
                 fontSize: '0.8rem',
-                cursor: 'pointer',
                 fontWeight: 'bold',
-                transition: 'all 0.2s'
+                cursor: 'pointer'
               }}
             >
               {label}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Redesigned Glass-morphic Control Panel with Search and Create Button - ADMIN/CCRB and Home only */}
       {isOversight && selectedFolderId === 'home' && (

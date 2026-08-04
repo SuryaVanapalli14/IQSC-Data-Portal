@@ -13,6 +13,7 @@ import Export from './pages/Export';
 import Users from './pages/Users';
 import CCRBDashboard from './pages/CCRBDashboard';
 import ManageMetrics from './pages/ManageMetrics';
+import PendingTracker from './pages/PendingTracker';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 
@@ -57,6 +58,7 @@ const AppContent = () => {
               <Route path="/admin/create" element={<ProtectedRoute adminOnly><FormBuilder /></ProtectedRoute>} />
               <Route path="/admin/edit/:id" element={<ProtectedRoute adminOnly><FormBuilder /></ProtectedRoute>} />
               <Route path="/admin/responses/:id" element={<ProtectedRoute oversightOnly><ResponseViewer /></ProtectedRoute>} />
+              <Route path="/admin/pending-tracker" element={<ProtectedRoute adminOnly><PendingTracker /></ProtectedRoute>} />
               <Route path="/admin/logs" element={<ProtectedRoute adminOnly><Logs /></ProtectedRoute>} />
               <Route path="/admin/export" element={<ProtectedRoute oversightOnly><Export /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute adminOnly><Users /></ProtectedRoute>} />
