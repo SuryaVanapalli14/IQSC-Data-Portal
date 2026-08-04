@@ -90,7 +90,7 @@ const History = () => {
                   borderRadius: '6px',
                   textTransform: 'uppercase'
                 }}>
-                  {item.status === 'PENDING' ? 'Pending Review' : item.status}
+                  {item.status === 'PENDING' ? 'Pending Review at HOD' : item.status === 'REJECTED' ? 'Re-submission Requested' : item.status}
                 </span>
                 <Link 
                   to={`/faculty/submission/${item.id}`}

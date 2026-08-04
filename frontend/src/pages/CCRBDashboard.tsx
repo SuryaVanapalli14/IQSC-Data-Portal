@@ -26,6 +26,7 @@ interface Form {
 
 const CCRBDashboard = () => {
   const [forms, setForms] = useState<Form[]>([]);
+  const [pendingResponses, setPendingResponses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -38,6 +39,13 @@ const CCRBDashboard = () => {
         
         const formsRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/forms`, { headers });
         setForms(formsRes.data);
+
+        try {
+          const pendingRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/admin/pending-tracker`, { headers });
+          setPendingResponses(pendingRes.data);
+        } catch (pErr) {
+          console.error('Pending tracker fetch error:', pErr);
+        }
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
       } finally {
@@ -90,7 +98,44 @@ const CCRBDashboard = () => {
         </div>
       </div>
 
-      {/* Row 1: KPI Cards removed */}
+      {/* Pending Approvals Reminder Banner */}
+      {pendingResponses.length > 0 && (
+        <div style={{
+          background: 'rgba(245, 158, 11, 0.12)',
+          border: '1px solid rgba(245, 158, 11, 0.4)',
+          borderRadius: '12px',
+          padding: '1rem 1.5rem',
+          marginBottom: '1.25rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 4px 12px rgba(245, 158, 11, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', color: '#d97706' }}>
+            <ShieldAlert size={24} />
+            <div>
+              <div style={{ fontWeight: '800', fontSize: '1rem' }}>
+                ⚠️ Action Required: {pendingResponses.length} Pending Submission{pendingResponses.length > 1 ? 's' : ''} Awaiting Review
+              </div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.85, marginTop: '2px', fontWeight: '500' }}>
+                Faculty members in your department have submitted responses requiring your review and approval.
+              </div>
+            </div>
+          </div>
+          <span style={{
+            fontSize: '0.8rem',
+            fontWeight: 'bold',
+            background: '#f59e0b',
+            color: 'white',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase'
+          }}>
+            {pendingResponses.length} Pending Approval{pendingResponses.length > 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
 
       {/* Main Secondary Area - Form Summary Table */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1, minHeight: 0 }}>

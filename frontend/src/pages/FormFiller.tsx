@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { CheckCircle, ArrowLeft, AlertCircle } from 'lucide-react';
@@ -34,6 +35,8 @@ const FormFiller = () => {
   const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
   const [responseStatus, setResponseStatus] = useState<string | null>(null);
   const [rejectionComment, setRejectionComment] = useState<string | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [deptConfirmed, setDeptConfirmed] = useState(false);
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -83,12 +86,21 @@ const FormFiller = () => {
     fetchFormAndResponse();
   }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmitClick = (e: React.FormEvent) => {
     e.preventDefault();
     const isApproved = responseStatus === 'APPROVED';
     const isFaculty = user?.role === 'FACULTY';
-    if (isApproved && isFaculty) return; // double check UI lock
+    if (isApproved && isFaculty) return;
 
+    if (user?.role === 'FACULTY') {
+      setDeptConfirmed(false);
+      setShowPreviewModal(true);
+    } else {
+      executeSubmit();
+    }
+  };
+
+  const executeSubmit = async () => {
     try {
       const token = localStorage.getItem('token');
       if (existingResponseId) {
@@ -102,8 +114,10 @@ const FormFiller = () => {
           { headers: { Authorization: `Bearer ${token}` } }
         );
       }
+      setShowPreviewModal(false);
       setSubmitted(true);
     } catch (err: any) {
+      setShowPreviewModal(false);
       setError(err.response?.data?.error || 'Failed to submit response');
     }
   };
@@ -292,7 +306,7 @@ const FormFiller = () => {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <AlertCircle size={20} />
-                  <span>REJECTED BY HOD: Please update your response and resubmit.</span>
+                  <span>RE-SUBMISSION REQUESTED BY HOD: Please update your response and resubmit.</span>
                 </div>
                 {rejectionComment && (
                   <div style={{ fontSize: '0.85rem', opacity: 0.9, background: 'rgba(239, 68, 68, 0.05)', padding: '8px 12px', borderRadius: '6px', borderLeft: '3px solid #ef4444', marginTop: '4px' }}>
@@ -317,7 +331,7 @@ const FormFiller = () => {
                 fontSize: '0.95rem'
               }}>
                 <AlertCircle size={20} />
-                <span>PENDING REVIEW: Submitted response is currently awaiting review by HOD. You can still modify and resubmit.</span>
+                <span>PENDING REVIEW AT HOD: Your submission is currently pending review by your department HOD. You can still modify and resubmit.</span>
               </div>
             )}
 
@@ -341,7 +355,7 @@ const FormFiller = () => {
             )}
 
             <div style={{ background: 'var(--card-bg)', padding: '2.5rem', borderRadius: '1rem', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)' }}>
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleFormSubmitClick}>
                 {form.schema.map(field => (
                   <div key={field.id} style={{ marginBottom: '2rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.7rem', fontWeight: 600 }}>
@@ -537,6 +551,121 @@ const FormFiller = () => {
             </div>
           </>
         )}
+      {showPreviewModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.65)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+          animation: 'fade 0.2s'
+        }}>
+          <div style={{
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: 'min(90vw, 550px)',
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+            color: 'var(--text-primary)'
+          }}>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+              📋 Preview & Confirm Submission
+            </h3>
+            <p style={{ opacity: 0.7, fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              Please review your entered details carefully before forwarding to your Department HOD.
+            </p>
+
+            {/* Department Confirmation Box */}
+            <div style={{
+              background: 'rgba(37, 99, 235, 0.08)',
+              border: '1px solid rgba(37, 99, 235, 0.3)',
+              borderRadius: '10px',
+              padding: '1rem 1.25rem',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.4rem', color: 'var(--accent-primary)' }}>
+                🏢 Department Confirmation
+              </div>
+              <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', opacity: 0.8 }}>
+                Submitting for: <strong>{user?.department || 'General'} Department</strong>
+              </p>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={deptConfirmed}
+                  onChange={e => setDeptConfirmed(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span>I confirm that I belong to the {user?.department || 'General'} Department and all entered details are accurate.</span>
+              </label>
+            </div>
+
+            {/* Summary Preview List */}
+            <h4 style={{ fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', opacity: 0.6, letterSpacing: '0.5px', marginBottom: '0.75rem' }}>
+              Entered Response Data
+            </h4>
+            <div style={{ background: 'var(--bg-primary)', borderRadius: '10px', padding: '1rem', border: '1px solid var(--border-color)', marginBottom: '1.5rem', maxHeight: '220px', overflowY: 'auto' }}>
+              {form?.schema.map(field => (
+                <div key={field.id} style={{ marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
+                  <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 'bold', opacity: 0.6, textTransform: 'uppercase' }}>
+                    {field.label}
+                  </span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: '600', wordBreak: 'break-word' }}>
+                    {typeof formData[field.id] === 'object' && formData[field.id]?.filename
+                      ? `📁 ${formData[field.id].filename}`
+                      : formData[field.id] || <span style={{ opacity: 0.4 }}>Not provided</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(false)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Back to Edit
+              </button>
+              <button
+                type="button"
+                onClick={executeSubmit}
+                disabled={!deptConfirmed}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: deptConfirmed ? 'var(--accent-primary)' : 'gray',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 'bold',
+                  cursor: deptConfirmed ? 'pointer' : 'not-allowed',
+                  opacity: deptConfirmed ? 1 : 0.6
+                }}
+              >
+                Confirm & Submit
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       </div>
     </div>
   );

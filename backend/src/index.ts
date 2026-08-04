@@ -281,6 +281,35 @@ app.post('/api/admin/log-export', authenticate, isOversight, async (req: Request
   }
 });
 
+app.get('/api/admin/pending-tracker', authenticate, isOversight, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { role: true, department: true }
+    });
+    if (!dbUser) return res.status(404).json({ error: 'User not found' });
+
+    const where: any = { status: 'PENDING' };
+    if (dbUser.role === 'HOD') {
+      where.respondent = { department: dbUser.department || '' };
+    }
+
+    const pendingResponses = await prisma.response.findMany({
+      where,
+      include: {
+        form: { select: { id: true, title: true } },
+        respondent: { select: { name: true, email: true, department: true } }
+      },
+      orderBy: { submittedAt: 'asc' }
+    });
+
+    res.json(pendingResponses);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch pending tracker data' });
+  }
+});
+
 app.get('/api/responses/my-history', authenticate, async (req: Request, res: Response) => {
   const user = (req as any).user;
   try {

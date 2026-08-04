@@ -36,6 +36,7 @@ const ResponseViewer = () => {
   const [reviewResponseId, setReviewResponseId] = useState<string | null>(null);
   const [reviewAction, setReviewAction] = useState<'APPROVED' | 'REJECTED' | null>(null);
   const [reviewComment, setReviewComment] = useState('');
+  const [approveConsent, setApproveConsent] = useState(false);
   const [editingResponse, setEditingResponse] = useState<{ id: string; data: any } | null>(null);
   const navigate = useNavigate();
 
@@ -157,6 +158,7 @@ const ResponseViewer = () => {
     setReviewResponseId(responseId);
     setReviewAction(action);
     setReviewComment('');
+    setApproveConsent(false);
   };
 
   const submitReview = async () => {
@@ -401,7 +403,7 @@ const ResponseViewer = () => {
                       {resp.status === 'PENDING' && (
                         <>
                           <button onClick={() => triggerReview(resp.id, 'APPROVED')} style={{ padding: '5px 10px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}>Approve</button>
-                          <button onClick={() => triggerReview(resp.id, 'REJECTED')} style={{ padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}>Reject</button>
+                          <button onClick={() => triggerReview(resp.id, 'REJECTED')} style={{ padding: '5px 10px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 'bold' }}>Re-Submit</button>
                         </>
                       )}
                       {user?.role === 'IQAC_ADMIN' && (
@@ -575,26 +577,48 @@ const ResponseViewer = () => {
             animation: 'scaleUp 0.2s'
           }}>
             <h3 style={{ fontSize: '1.4rem', fontWeight: '700', marginBottom: '1rem', color: reviewAction === 'APPROVED' ? '#22c55e' : '#ef4444' }}>
-              Confirm Form {reviewAction === 'APPROVED' ? 'Approval' : 'Rejection'}
+              {reviewAction === 'APPROVED' ? 'Confirm Form Approval' : 'Request Re-submission'}
             </h3>
             <p style={{ opacity: 0.8, fontSize: '0.95rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
               {reviewAction === 'APPROVED' 
-                ? 'Are you sure you want to approve this faculty submission? This will lock their response and they will no longer be able to edit it.'
-                : 'Please provide comments or feedback outlining the reason for rejecting this response.'}
+                ? 'Reviewing and approving this faculty submission will lock the response and forward it for official records.'
+                : 'Please provide comments or feedback outlining the reason for requesting re-submission from the faculty.'}
             </p>
+
+            {reviewAction === 'APPROVED' && (
+              <div style={{
+                background: 'rgba(34, 197, 94, 0.08)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: '10px',
+                padding: '1rem',
+                marginBottom: '1.5rem'
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={approveConsent}
+                    onChange={e => setApproveConsent(e.target.checked)}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <span>I confirm that I have thoroughly reviewed this submission and approve it for higher authorities / IQAC Admin review.</span>
+                </label>
+              </div>
+            )}
+
             {reviewAction === 'REJECTED' && (
               <textarea
                 className="input"
                 rows={4}
-                placeholder="Enter feedback details..."
+                placeholder="Enter feedback comments outlining required revisions..."
                 value={reviewComment}
                 onChange={e => setReviewComment(e.target.value)}
                 style={{ width: '100%', marginBottom: '1.5rem', resize: 'vertical' }}
               />
             )}
+
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
               <button 
-                onClick={() => { setReviewResponseId(null); setReviewAction(null); }}
+                onClick={() => { setReviewResponseId(null); setReviewAction(null); setApproveConsent(false); }}
                 style={{
                   padding: '10px 20px',
                   borderRadius: '8px',
@@ -609,17 +633,19 @@ const ResponseViewer = () => {
               </button>
               <button 
                 onClick={submitReview}
+                disabled={reviewAction === 'APPROVED' && !approveConsent}
                 style={{
                   padding: '10px 20px',
                   borderRadius: '8px',
-                  background: reviewAction === 'APPROVED' ? '#22c55e' : '#ef4444',
+                  background: (reviewAction === 'APPROVED' && !approveConsent) ? 'gray' : (reviewAction === 'APPROVED' ? '#22c55e' : '#ef4444'),
                   color: 'white',
                   border: 'none',
                   fontWeight: 'bold',
-                  cursor: 'pointer'
+                  cursor: (reviewAction === 'APPROVED' && !approveConsent) ? 'not-allowed' : 'pointer',
+                  opacity: (reviewAction === 'APPROVED' && !approveConsent) ? 0.6 : 1
                 }}
               >
-                Confirm {reviewAction === 'APPROVED' ? 'Approve' : 'Reject'}
+                {reviewAction === 'APPROVED' ? 'Confirm Approve' : 'Confirm Re-Submit'}
               </button>
             </div>
           </div>
